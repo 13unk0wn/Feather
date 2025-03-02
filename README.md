@@ -16,7 +16,6 @@ A lightweight, ad-less player with only essential features.
 - ⚡ **Minimal Memory Usage**, targeting **60MB - 80MB RAM**.
 - 🚀 **Fast Playback**, with loading times around 3 seconds.
 - 🖥️ **Terminal User Interface (TUI)** built using Ratatui.
-- 🐄 **Sled Database Support** for caching and managing data.
 - 🔄 **Self-Update Feature** (planned).
 
 ## 🛠️ Installation
@@ -95,6 +94,7 @@ A big thank you to the maintainers and contributors of:
 - [RustyPipe](https://codeberg.org/ThetaDev/rustypipe) — for providing essential tools for YouTube playback.
 - [mpv](https://github.com/mpv-player/mpv) — for making a great media player that powers Feather's playback.
 - [Ratatui](https://github.com/tui-rs-revival/ratatui) — for enabling the terminal-based UI experience.
+- [Sled](https://github.com/spacejam/sled) - database
 
 ## 🌟 License
 
