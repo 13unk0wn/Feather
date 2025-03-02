@@ -32,14 +32,14 @@ Ensure you have the following installed:
 
 ```sh
 https://github.com/13unk0wn/Feather.git
-cd feather
+cd feather_frontend
 cargo build --release
 ```
 
 ### ▶️ Run Feather
 
 ```sh
-target/release/feather
+./target/release/feather_frontend
 ```
 
 ## 🎮 Usage
