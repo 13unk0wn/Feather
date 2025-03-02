@@ -32,7 +32,7 @@ Ensure you have the following installed:
 
 ```sh
 git clone https://github.com/13unk0wn/Feather.git
-cd feather_frontend
+cd Feather/feather_frontend
 cargo build --release
 ```
 
