@@ -31,7 +31,7 @@ Ensure you have the following installed:
 ### 🔧 Build from Source
 
 ```sh
-git clone https://github.com/yourusername/feather.git
+https://github.com/13unk0wn/Feather.git
 cd feather
 cargo build --release
 ```
