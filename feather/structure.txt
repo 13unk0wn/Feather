@@ -1,0 +1,36 @@
+Feather
+│── backend
+│   │── yt.rs                
+│   │   │── search(query: &str) -> Vec<String>       # Search YouTube and return video URLs. [done]
+│   │   │── fetch_url(video_id: &str) -> String      # Get the direct link for mpv to play. [done]
+│   │   │── fetch_playlist(playlist_id: &str) -> Vec<String>  # Fetch all songs in a playlist. [done]
+│   │   │── fetch_related(video_id: &str) -> Vec<String>      # Get related songs (for autoplay).[unresolved]
+│   │
+│   │── mpv.rs               
+│   │   │── play(url: &str)                           # Play a song using mpv.
+│   │   │── pause()                                   # Pause or resume playback.
+│   │   │── stop()                                    # Stop the current playback.
+│   │   │── skip(seconds: i64)                        # Skip forward/backward by seconds.
+│   │   │── volume(level: u8)                         # Adjust the volume level.
+│   │   │── next()                                    # Play the next song in the queue.
+│   │   │── on_song_end()                             # Triggered when a song ends (handles autoplay).
+│   │
+│   │── database.rs        
+│   │   │── add_to_history(song: &str)               # Save song to history. [done]
+│   │   │── get_history() -> Vec<String>             # Retrieve history list. [done]
+│   │   │── delete_from_history(index: usize)        # Remove a song from history. [done]
+│   │   │── save_playlist(name: &str, songs: Vec<String>)   # Create or update a playlist.[done]
+│   │   │── load_playlist(name: &str) -> Vec<String>        # Load songs from a playlist.[done]
+│   │   │── delete_playlist(name: &str)              # Delete a playlist.[done]
+│   │   │── get_last_played() -> Option<String>      # Get the last played song.[done]
+│   │   │── add_to_queue(song: &str)                 # Add song to queue.
+│   │   │── remove_from_queue(index: usize)          # Remove song from queue.
+│   │   │── get_next_song() -> Option<String>        # Get next song from queue.
+│   │   │── clear_queue()                            # Clear the queue.
+│   │
+│   │── config.rs        
+│   │   │── load_config() -> Config                  # Load settings from `config.lua`.
+│   │   │── save_config(config: &Config)             # Save updated settings.
+│   │   │── watch_config()                           # Optional: Reload config if changed.
+│   │
+│── config.lua       # User settings (autoplay, volume, history limit, storage path).

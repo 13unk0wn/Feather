@@ -1,0 +1,32 @@
+[package]
+name = "feather_frontend"
+version = "0.1.0"
+edition = "2024"
+authors = ["13unk0wn 13unk0wn@proton.me"]
+description = "A lightweight YouTube Music TUI in Rust."
+license = "MIT"
+categories = ["command-line-utilities", "multimedia"]
+keywords = ["music", "youtube", "tui", "rust"]
+
+
+
+[dependencies]
+color-eyre = "0.6.3"
+crossterm = "0.28.1"
+ratatui = "0.29.0"
+tui-textarea = "0.7.0"
+feather = {path  = "../feather"}
+tokio = "1.43.0"
+tui-scrollview = "0.3"
+thiserror ="1.0"
+wee_alloc = "0.4"
+
+[profile.release]
+opt-level = 3  # Maximum optimization
+lto = true     # Link Time Optimization
+codegen-units = 1  # Optimize for binary size
+strip = true   # Remove debug symbols
+panic = 'abort'  # Reduce unwinding overhead
+
+# [replace-with]
+# global_allocator = "wee_alloc"
