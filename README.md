@@ -31,7 +31,7 @@ Ensure you have the following installed:
 ### 🔧 Build from Source
 
 ```sh
-https://github.com/13unk0wn/Feather.git
+git clone https://github.com/13unk0wn/Feather.git
 cd feather_frontend
 cargo build --release
 ```
