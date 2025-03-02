@@ -86,7 +86,7 @@ Contributions are welcome! If you'd like to contribute, feel free to submit issu
 If you have any doubts regarding contribution, feel free to reach out via:
 - GitHub Issues
 - @x: [13unk0wn](https://x.com/13unk0wn)
-- Email: [13unk0wn.proton.me](mailto:13unk0wn.proton.me)
+- Email: [13unk0wn.proton.me](mailto:13unk0wn@proton.me)
 
 ## 🌟 Special Thanks
 
