@@ -1,7 +1,7 @@
 # Feather 🎵
 
 
-![Feather Logo](screenshots/logo.webp)
+![Feather Logo](screenshots/logo_small.webp)
 
 
 Feather is a lightweight, efficient, and locally hosted YouTube Music TUI built with Rust. It is designed to provide a minimalistic yet powerful music streaming experience directly from YouTube, using `yt-dlp` and `mpv`.
