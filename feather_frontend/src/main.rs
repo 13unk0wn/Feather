@@ -54,7 +54,7 @@ impl App<'_> {
     /// Creates a new instance of the application.
     fn new() -> Self {
         let history = Arc::new(HistoryDB::new().unwrap());
-        let get_cookies = env::var("COOKIES").ok(); // Fetch cookies from environment variables if available.
+        let get_cookies = env::var("FEATHER_COOKIES").ok(); // Fetch cookies from environment variables if available.
         let backend = Arc::new(Backend::new(history.clone(), get_cookies).unwrap());
         let (tx, rx) = mpsc::channel(32);
 
