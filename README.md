@@ -51,7 +51,7 @@ Navigate through the TUI to search and play music. Additional controls and keybo
 If a song fails to play due to YouTube restrictions, you can bypass them by adding your cookies to the environment:
 
 ```sh
-export COOKIES="paste your cookies here"
+export FEATHER_COOKIES="paste your cookies here"
 ```
 
 - This is **optional** and should only be used if playback errors occur.
