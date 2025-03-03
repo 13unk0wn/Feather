@@ -1,7 +1,7 @@
 # Feather 🎵
 
 
-![Feather Logo](screenshots/logo.webp)
+![Feather Logo](screenshots/logo_small.webp)
 
 
 Feather is a lightweight, efficient, and locally hosted YouTube Music TUI built with Rust. It is designed to provide a minimalistic yet powerful music streaming experience directly from YouTube, using `yt-dlp` and `mpv`.
@@ -16,7 +16,6 @@ A lightweight, ad-less player with only essential features.
 - ⚡ **Minimal Memory Usage**, targeting **60MB - 80MB RAM**.
 - 🚀 **Fast Playback**, with loading times around 3 seconds.
 - 🖥️ **Terminal User Interface (TUI)** built using Ratatui.
-- 🐄 **Sled Database Support** for caching and managing data.
 - 🔄 **Self-Update Feature** (planned).
 
 ## 🛠️ Installation
@@ -32,15 +31,15 @@ Ensure you have the following installed:
 ### 🔧 Build from Source
 
 ```sh
-git clone https://github.com/yourusername/feather.git
-cd feather
+git clone https://github.com/13unk0wn/Feather.git
+cd Feather/feather_frontend
 cargo build --release
 ```
 
 ### ▶️ Run Feather
 
 ```sh
-target/release/feather
+./target/release/feather_frontend
 ```
 
 ## 🎮 Usage
@@ -52,7 +51,7 @@ Navigate through the TUI to search and play music. Additional controls and keybo
 If a song fails to play due to YouTube restrictions, you can bypass them by adding your cookies to the environment:
 
 ```sh
-export COOKIES="/path/to/your/cookies.txt"
+export COOKIES="paste your cookies here"
 ```
 
 - This is **optional** and should only be used if playback errors occur.
@@ -87,7 +86,7 @@ Contributions are welcome! If you'd like to contribute, feel free to submit issu
 If you have any doubts regarding contribution, feel free to reach out via:
 - GitHub Issues
 - @x: [13unk0wn](https://x.com/13unk0wn)
-- Email: [13unk0wn.proton.me](mailto:13unk0wn.proton.me)
+- Email: [13unk0wn.proton.me](mailto:13unk0wn@proton.me)
 
 ## 🌟 Special Thanks
 
@@ -95,6 +94,7 @@ A big thank you to the maintainers and contributors of:
 - [RustyPipe](https://codeberg.org/ThetaDev/rustypipe) — for providing essential tools for YouTube playback.
 - [mpv](https://github.com/mpv-player/mpv) — for making a great media player that powers Feather's playback.
 - [Ratatui](https://github.com/tui-rs-revival/ratatui) — for enabling the terminal-based UI experience.
+- [Sled](https://github.com/spacejam/sled) - database
 
 ## 🌟 License
 
