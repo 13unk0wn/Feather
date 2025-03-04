@@ -61,7 +61,10 @@ impl Player {
 
     /// Loads and plays a media file from a given URL.
     pub fn play(&self, url: &str) -> Result<(), MpvError> {
-        self.player.command("loadfile", &[url, "replace"])?; // Replace the current playback
+        if let Ok(true) = self.player.get_property("pause") {
+            self.unpause()?;
+        }
+        self.player.command("loadfile", &[url])?; // Replace the current playback
         Ok(())
     }
 

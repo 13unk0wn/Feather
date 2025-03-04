@@ -2,6 +2,8 @@
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
 use feather::database::HistoryDB;
+use feather_frontend::playlist_search::PlayListSearch;
+use feather_frontend::search_main::SearchMain;
 use feather_frontend::{
     backend::Backend, help::Help, history::History, player::SongPlayer, search::Search,
 };
@@ -49,7 +51,7 @@ enum State {
 /// Main application struct managing the state and UI components.
 struct App<'a> {
     state: State,
-    search: Search<'a>,
+    search: SearchMain<'a>,
     history: History,
     help: Help,
     // user_playlist: UserPlaylist,
@@ -69,10 +71,12 @@ impl App<'_> {
         let get_cookies = env::var("FEATHER_COOKIES").ok(); // Fetch cookies from environment variables if available.
         let backend = Arc::new(Backend::new(history.clone(), get_cookies).unwrap());
         let (tx, rx) = mpsc::channel(32);
+        let search   =  Search::new(backend.clone(), tx.clone());
+        let playlist_search  = PlayListSearch::new(backend.clone());
 
         App {
             state: State::Global,
-            search: Search::new(backend.clone(), tx.clone()),
+            search: SearchMain::new(search,playlist_search),
             history: History::new(history, backend.clone(), tx.clone()),
             help: Help::new(),
             // user_playlist: UserPlaylist {},
@@ -150,7 +154,7 @@ impl App<'_> {
                         .constraints([
                             Constraint::Length(3),
                             Constraint::Min(0),
-                            Constraint::Percentage(15),
+                            Constraint::Length(5),
                         ])
                         .split(area);
 
