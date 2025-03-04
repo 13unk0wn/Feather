@@ -1,4 +1,3 @@
-#![allow(unused)]
 use crate::backend::{Backend, Song};
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::database::HistoryDB;
@@ -91,8 +90,19 @@ impl History {
 
     // Renders the history UI component
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0)]) // Split layout
+            .split(area);
+
+        // Render title bar
+        Paragraph::new("History")
+            .style(Style::default().fg(Color::White))
+            .block(Block::default().borders(Borders::ALL))
+            .render(chunks[0], buf);
+
         // Setup history list area with scrollbar
-        let history_area = area;
+        let history_area = chunks[1];
         let scrollbar = Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
