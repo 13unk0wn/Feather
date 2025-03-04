@@ -60,6 +60,7 @@ export FEATHER_COOKIES="paste your cookies here"
 ## 🛠️ Compatibility
 
 Feather has been tested on **Linux Mint (Debian Edition)**, but all libraries used are compatible with other Linux distributions.
+Windows and Macos are not officially supported.
 
 ## 🛣️ Roadmap
 
