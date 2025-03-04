@@ -65,10 +65,10 @@ impl YoutubeClient {
     pub async fn fetch_playlist(
         &self,
         search_query: &str,
-    ) -> Result<Vec<((PlaylistName,PlaylistId), Vec<ChannelName>)>, String> {
+    ) -> Result<HashMap<PlaylistName, (PlaylistId, Vec<ChannelName>)>, String> {
         match self.client.music_search_playlists(search_query, true).await {
             Ok(playlists) => {
-                let mut result = Vec::new();
+                let mut result = HashMap::new();
 
                 for playlist in playlists.items.items {
                     let playlist_id = playlist.id;
@@ -78,7 +78,7 @@ impl YoutubeClient {
                         .map(|channel| channel.name)
                         .collect();
 
-                    result.push(((playlist.name,playlist_id), channel_names));
+                    result.insert(playlist.name, (playlist_id, channel_names));
                 }
 
                 Ok(result)
@@ -162,7 +162,6 @@ impl YoutubeClient {
 //         Err(e) => println!("Search failed: {}", e),
 //     }
 // }
-// #[allow(unused)]
 // #[tokio::test]
 // async fn test_fetch_playlist() {
 //     let client = YoutubeClient::new();
@@ -172,11 +171,12 @@ impl YoutubeClient {
 //         Ok(playlists) => {
 //             for (playlist_name, (playlist_id, channel_names)) in playlists {
 //                 println!("Playlist: {} (ID: {})", playlist_name, playlist_id);
-//                 // test_fetch_playlist_songs(playlist_id).await;
+//                 test_fetch_playlist_songs(playlist_id).await;
 
 //                 // for channel in channel_names {
 //                 //     println!("  - Channel: {}", channel);
 //                 // }
+//                 break;
 //             }
 //         }
 //         Err(e) => eprintln!("Test failed: {}", e),
@@ -189,11 +189,7 @@ impl YoutubeClient {
 //         Ok(songs) => {
 //             for ((song_name, song_id), artist_names) in songs {
 //                 println!("Song: {} (ID: {})", song_name, song_id);
-//                 let mut e =   client.fetch_song_url(&song_id).await;
-//                 while let Err(_)  = client.fetch_song_url(&song_id).await{
-//                     e = client.fetch_song_url(&song_id).await;
-//                 }
-//                 let url  = e.unwrap_or("default".to_string());
+//                 let url  =  client.fetch_song_url(&song_id).await.unwrap();
 //                 println!("{url:?}");
 //                 for artist in artist_names {
 //                     println!("  - Artist: {}", artist);
