@@ -1,4 +1,5 @@
 use crate::{ArtistName, ChannelName, PlaylistId, PlaylistName, SongId, SongName, SongUrl};
+use std::path::PathBuf;
 use rustypipe::{
     client::{RustyPipe, RustyPipeQuery},
     model::MusicItem,
@@ -14,7 +15,10 @@ pub struct YoutubeClient {
 impl YoutubeClient {
     /// Creates a new instance of `YoutubeClient`.
     pub fn new() -> Self {
-        let client = RustyPipe::new().query();
+        let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        path.push("Feather");
+        let rp = RustyPipe::builder().storage_dir(path).build().unwrap();
+        let client = rp.query();
         YoutubeClient { client }
     }
 
