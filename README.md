@@ -80,11 +80,17 @@ Windows and Macos are not officially supported.
 
 Contributions are welcome! If you'd like to contribute, feel free to submit issues or pull requests.
 
+🚀 **Please make all contributions to the `dev` branch instead of `main`.**  
+- Clone the repository and create a new branch from `dev`.  
+- After making changes, create a pull request (PR) **from your branch to `dev`**.  
+- Once reviewed, changes will be merged into `main`.
+
 If you have any doubts regarding contribution, feel free to reach out via:
 - GitHub Issues
 - @x: [13unk0wn](https://x.com/13unk0wn)
 - Email: [13unk0wn@proton.me](mailto:13unk0wn@proton.me)
 
+Thank you for contributing! 😊
 ## 🌟 Special Thanks
 
 A big thank you to the maintainers and contributors of:
