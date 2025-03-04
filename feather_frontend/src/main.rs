@@ -1,12 +1,23 @@
+#![allow(unused)]
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
 use feather::database::HistoryDB;
-use feather_frontend::{backend::Backend, history::History, player::SongPlayer, search::Search};
+use feather_frontend::playlist_search::PlayListSearch;
+use feather_frontend::search_main::SearchMain;
+use feather_frontend::{
+    backend::Backend, help::Help, history::History, player::SongPlayer, search::Search,
+};
+use ratatui::prelude::Alignment;
+use ratatui::style::Color;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Padding;
 use ratatui::{
     DefaultTerminal,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Widget},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 use std::{env, sync::Arc};
 use tokio::{
@@ -25,8 +36,9 @@ async fn main() -> Result<()> {
 }
 
 /// Enum representing different states of the application.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum State {
+    Home,
     HelpMode,
     Global,
     Search,
@@ -39,8 +51,9 @@ enum State {
 /// Main application struct managing the state and UI components.
 struct App<'a> {
     state: State,
-    search: Search<'a>,
+    search: SearchMain<'a>,
     history: History,
+    help: Help,
     // user_playlist: UserPlaylist,
     // current_playling_playlist: CurrentPlayingPlaylist,
     top_bar: TopBar,
@@ -48,6 +61,7 @@ struct App<'a> {
     // backend: Arc<Backend>,
     help_mode: bool,
     exit: bool,
+    prev_state: Option<State>,
 }
 
 impl App<'_> {
@@ -57,11 +71,14 @@ impl App<'_> {
         let get_cookies = env::var("FEATHER_COOKIES").ok(); // Fetch cookies from environment variables if available.
         let backend = Arc::new(Backend::new(history.clone(), get_cookies).unwrap());
         let (tx, rx) = mpsc::channel(32);
+        let search   =  Search::new(backend.clone(), tx.clone());
+        let playlist_search  = PlayListSearch::new(backend.clone());
 
         App {
             state: State::Global,
-            search: Search::new(backend.clone(), tx.clone()),
+            search: SearchMain::new(search,playlist_search),
             history: History::new(history, backend.clone(), tx.clone()),
+            help: Help::new(),
             // user_playlist: UserPlaylist {},
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
@@ -69,27 +86,42 @@ impl App<'_> {
             // backend,
             help_mode: false,
             exit: false,
+            prev_state: None,
+        }
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char(':') => {
+                if let Ok(next_key) = crossterm::event::read() {
+                    if let Event::Key(next_key) = next_key {
+                        match next_key.code {
+                            KeyCode::Char('s') => self.state = State::Search,
+                            KeyCode::Char('h') => self.state = State::History,
+                            KeyCode::Char('p') => {
+                                self.prev_state = Some(self.state);
+                                self.state = State::SongPlayer;
+                            }
+                            KeyCode::Char('?') => {
+                                self.help_mode = true;
+                                self.state = State::HelpMode;
+                            }
+                            KeyCode::Char('q') => {
+                                self.exit = true;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => self.handle_global_keystrokes(key),
         }
     }
 
     /// Handles global keystrokes and state transitions.
     fn handle_global_keystrokes(&mut self, key: KeyEvent) {
         match self.state {
-            State::Global => match key.code {
-                KeyCode::Char('s') => self.state = State::Search,
-                KeyCode::Char('h') => self.state = State::History,
-                KeyCode::Char('p') => self.state = State::SongPlayer,
-                KeyCode::Char('?') => {
-                    self.help_mode = true;
-                    self.state = State::HelpMode;
-                }
-                KeyCode::Esc => {
-                    self.exit = true;
-                }
-                _ => (),
-            },
             State::Search => match key.code {
-                KeyCode::Esc => self.state = State::Global,
                 _ => self.search.handle_keystrokes(key),
             },
             State::HelpMode => match key.code {
@@ -100,13 +132,12 @@ impl App<'_> {
                 _ => (),
             },
             State::History => match key.code {
-                KeyCode::Esc => self.state = State::Global,
                 _ => self.history.handle_keystrokes(key),
             },
             State::SongPlayer => match key.code {
-                KeyCode::Esc => self.state = State::Global,
                 _ => self.player.handle_keystrokes(key),
             },
+            _ => (),
         }
     }
 
@@ -121,71 +152,43 @@ impl App<'_> {
                     let layout = Layout::default()
                         .direction(ratatui::layout::Direction::Vertical)
                         .constraints([
-                            Constraint::Percentage(10),
-                            Constraint::Percentage(75),
-                            Constraint::Percentage(15),
+                            Constraint::Length(3),
+                            Constraint::Min(0),
+                            Constraint::Length(5),
                         ])
                         .split(area);
 
-                    let middle_layout = Layout::default()
-                        .direction(ratatui::layout::Direction::Horizontal)
-                        .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
-                        .split(layout[1]);
+                    self.top_bar
+                        .render(layout[0], frame.buffer_mut(), &self.state);
+
+                    // Background for the whole UI
+                    frame.render_widget(
+                        Block::default().style(Style::default().bg(Color::Rgb(0, 39, 44))),
+                        area,
+                    );
 
                     if !self.help_mode {
-                        self.top_bar
-                            .render(layout[0], frame.buffer_mut(), &self.state);
-                        self.search.render(middle_layout[0], frame.buffer_mut());
-                        self.history.render(middle_layout[1], frame.buffer_mut());
+                        match self.state {
+                            State::Search => self.search.render(layout[1], frame.buffer_mut()),
+                            State::History => self.history.render(layout[1], frame.buffer_mut()),
+                            State::SongPlayer => {
+                                if let Some(prev) = self.prev_state {
+                                    match prev {
+                                        State::Search => {
+                                            self.search.render(layout[1], frame.buffer_mut())
+                                        }
+                                        State::History => {
+                                            self.history.render(layout[1], frame.buffer_mut())
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
                         self.player.render(layout[2], frame.buffer_mut());
                     } else {
-                        let rows = vec![
-                            Row::new(vec![Cell::from("s"), Cell::from("Search")]),
-                            Row::new(vec![Cell::from("h"), Cell::from("History")]),
-                            Row::new(vec![Cell::from("p"), Cell::from("Player")]),
-                            Row::new(vec![Cell::from("?"), Cell::from("Toggle Help Mode")]),
-                            Row::new(vec![
-                                Cell::from("TAB (Search)"),
-                                Cell::from("Toggle between search input and results"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("Esc (Global)"),
-                                Cell::from("Quit application"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("Esc (Non-Global)"),
-                                Cell::from("Switch to Global Mode"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("↑ / k(History/Search)"),
-                                Cell::from("Navigate up in list"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("↓ / j(History/Search)"),
-                                Cell::from("Navigate down in list"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("Space / ; (Player)"),
-                                Cell::from("Pause current song"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("→ (Player)"),
-                                Cell::from("Skip forward 5 seconds"),
-                            ]),
-                            Row::new(vec![
-                                Cell::from("← (Player)"),
-                                Cell::from("Rewind 5 seconds"),
-                            ]),
-                        ];
-
-                        let help_table = Table::new(
-                            rows,
-                            [Constraint::Percentage(20), Constraint::Percentage(80)],
-                        )
-                        .block(Block::default().borders(Borders::ALL).title("Help"))
-                        .header(Row::new(vec![Cell::from("Key"), Cell::from("Action")]));
-
-                        help_table.render(area, frame.buffer_mut());
+                        self.help.render(layout[1], frame.buffer_mut());
                     }
                 })
                 .unwrap();
@@ -195,7 +198,7 @@ impl App<'_> {
                 _ = async {
                     if poll(Duration::from_millis(100)).unwrap() {
                         if let Event::Key(key) = read().unwrap() {
-                            self.handle_global_keystrokes(key);
+                            self.handle_key(key);
                         }
                     }
                 } => {}
@@ -212,10 +215,37 @@ impl TopBar {
         Self
     }
     fn render(&mut self, area: Rect, buf: &mut Buffer, state: &State) {
-        let s = format!("Feather | Current Mode : {:?}", state);
-        Paragraph::new(s)
-            .block(Block::default().borders(Borders::ALL))
-            .render(area, buf);
+        let titles = ["Home", "Search", "History"];
+
+        // Define colors
+        let normal_style = Style::default().fg(Color::White);
+        let selected_style = Style::default().fg(Color::Rgb(255, 255, 150)); // Light yellow
+
+        let mut spans = vec![];
+
+        for (i, title) in titles.iter().enumerate() {
+            let style = match (i, state) {
+                (0, State::Home) => selected_style,
+                (1, State::Search) => selected_style,
+                (2, State::History) => selected_style,
+                _ => normal_style,
+            };
+
+            spans.push(Span::styled(*title, style));
+
+            if i < titles.len() - 1 {
+                spans.push(Span::raw(" | ")); // Separator
+            }
+        }
+
+        let text = Line::from(spans);
+        let paragraph = Paragraph::new(text).alignment(Alignment::Left).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .padding(Padding::new(1, 0, 0, 0)),
+        );
+
+        paragraph.render(area, buf);
     }
 }
 

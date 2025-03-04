@@ -22,6 +22,7 @@ pub struct SongDetails {
     song: Song,             // Information about the song
     current_time: String,   // Current playback time (formatted as MM:SS)
     total_duration: String, // Total duration of the song
+    tries :  usize,
 }
 
 pub struct SongPlayer {
@@ -124,6 +125,7 @@ impl SongPlayer {
                                             song: value.clone(),
                                             current_time: backend.player.get_current_time(),
                                             total_duration,
+                                            tries :  0,
                                         });
                                         *state = SongState::Playing;
                                         return; // Exit once playing is confirmed
@@ -135,9 +137,6 @@ impl SongPlayer {
                     }
                     Ok(false) => {
                         // Song is not playing, set state to Idle
-                        if let Ok(mut state) = songstate.lock() {
-                            *state = SongState::Idle;
-                        }
                         idle_count += 1;
                     }
                     Err(_) => idle_count += 1, // Increase idle count if an error occurs
@@ -174,10 +173,14 @@ impl SongPlayer {
             let text = match *state {
                 SongState::Idle => vec![Line::from("No song is playing")],
                 SongState::Playing => {
-                    if let Ok(song_playing) = self.song_playing.lock() {
-                        song_playing.as_ref().map_or_else(
+                    if let Ok(mut song_playing) = self.song_playing.lock() {
+                        song_playing.as_mut().map_or_else(
                             || vec![Line::from("Loading...")],
                             |song| {
+                                if song.tries < 3 && song.total_duration == "00::00"{
+                                    song.total_duration = self.backend.player.duration(); 
+                                    song.tries+=1;
+                                }
                                 let current_time = song
                                     .current_time
                                     .parse::<i64>()
@@ -197,7 +200,7 @@ impl SongPlayer {
                     }
                 }
                 SongState::Loading => {
-                    vec![Line::from("Loading Song")]
+                    vec![Line::from("Loading...")]
                 }
                 SongState::ErrorPlayingoSong => {
                     vec![Line::from("Error Playing Song")]
