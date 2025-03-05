@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 # Feather 🎵
 
 
+=======
+# Feather
+>>>>>>> parent of 730c86a (Merge branch 'main' into v0.2)
 
 Feather is a lightweight, efficient, and locally hosted YouTube Music TUI built with Rust. It is designed to provide a minimalistic yet powerful music streaming experience directly from YouTube, using `yt-dlp` and `mpv`.
 
@@ -66,12 +70,20 @@ Windows and Macos are not officially supported.
 
 ## 🛣️ Roadmap
 
+<<<<<<< HEAD
 ### 🚀 Current Version: v0.1.0(Main and Dev Branch)
+=======
+### 🚀 Version: v0.1.0 (Main Branch)
+>>>>>>> parent of 730c86a (Merge branch 'main' into v0.2)
 - 🎶 Implement player
 - 🔍 Implement search
 - �햐 Implement history
 
+<<<<<<< HEAD
 ### 🔥 Upcoming: v0.2.0(v0.2 Branch)
+=======
+### 🔥 Upcoming: v0.2.0(v 0.0.2 Branch)
+>>>>>>> parent of 730c86a (Merge branch 'main' into v0.2)
 - ⚡ Improve performance
 - 🎨 Improve UI
 - 🌜 Add support for playing playlists
@@ -90,7 +102,7 @@ Contributions are welcome! If you'd like to contribute, feel free to submit issu
 If you have any doubts regarding contribution, feel free to reach out via:
 - GitHub Issues
 - @x: [13unk0wn](https://x.com/13unk0wn)
-- Email: [13unk0wn.proton.me](mailto:13unk0wn@proton.me)
+- Email: [13unk0wn@proton.me](mailto:13unk0wn@proton.me)
 
 Thank you for contributing! 😊
 ## 🌟 Special Thanks
