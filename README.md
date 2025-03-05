@@ -1,11 +1,10 @@
-# ⚠️ WARNING: v0.2 Branch is Unstable & In Development ⚠️
+<<<<<<< HEAD
+# Feather 🎵
 
-The `v0.2` branch is **not usable**, **unstable**, and **currently in development**.  
-Please use the `main` branch for a stable experience.  
 
 =======
 # Feather
-
+>>>>>>> parent of 730c86a (Merge branch 'main' into v0.2)
 
 Feather is a lightweight, efficient, and locally hosted YouTube Music TUI built with Rust. It is designed to provide a minimalistic yet powerful music streaming experience directly from YouTube, using `yt-dlp` and `mpv`.
 
