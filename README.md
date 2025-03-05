@@ -1,6 +1,7 @@
-<<<<<<< HEAD
-# Feather 🎵
+# ⚠️ WARNING: v0.2 Branch is Unstable ⚠️
 
+The `v0.2` branch is **not usable** and is currently **unstable**.  
+Please use the `main` branch for a stable experience.
 
 =======
 # Feather
