@@ -513,6 +513,7 @@ dependencies = [
  "bincode",
  "dirs",
  "libmpv2",
+ "pkg-config",
  "rustypipe",
  "serde",
  "sled",
