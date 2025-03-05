@@ -1,6 +1,8 @@
+#![allow(unused)]
 // This file manages the history database and contains all necessary functions related to history management
 use crate::{ArtistName, SongId, SongName};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sled::Db;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -116,6 +118,161 @@ impl HistoryDB {
         } else {
             Ok(None)
         }
+    }
+}
+
+use std::str;
+
+pub const PAGE_SIZE: usize = 20;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
+pub struct Song {
+    pub id: String,
+    pub title: String,
+    pub artist_name: Vec<String>,
+    current_index: usize,
+}
+
+impl Song {
+    pub fn new(id: String, title: String, artist_name: Vec<String>, current_index: usize) -> Self {
+        Self {
+            id,
+            title,
+            artist_name,
+            current_index,
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum SongError {
+    #[error("Database error: {0}")]
+    DbError(#[from] sled::Error),
+
+    #[error("Serialization error: {0}")]
+    SerdeError(#[from] serde_json::Error),
+
+    #[error("Invalid UTF-8 sequence")]
+    Utf8Error,
+}
+
+#[derive(Clone)]
+pub struct SongDatabase {
+    db: Db,
+    db_path: PathBuf,
+    current_index: usize,
+}
+
+impl Drop for SongDatabase {
+    fn drop(&mut self) {
+        self.db
+            .clear()
+            .expect("Failed to cleard the Web Playlist DB");
+        self.db.flush();
+        if let Ok(_) = std::fs::remove_file(&self.db_path) {}
+    }
+}
+
+impl SongDatabase {
+    pub fn new() -> Result<Self, SongError> {
+        let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        path.push("Feather/current_playlist");
+        let path_clone = path.clone();
+        let db = sled::open(path)?;
+        Ok(Self {
+            db,
+            db_path: path_clone,
+            current_index: 0,
+        })
+    }
+
+    pub fn add_song(
+        &mut self,
+        title: String,
+        id: String,
+        artist_name: Vec<String>,
+    ) -> Result<(), SongError> {
+        let song = Song::new(id, title, artist_name, self.current_index);
+        let key = format!("song:{}", self.current_index);
+        let value = serde_json::to_vec(&song)?;
+        self.db.insert(key, value)?;
+        self.current_index += 1;
+        Ok(())
+    }
+    pub fn next_page(&self, offset: usize) -> Result<Vec<Song>, SongError> {
+        let mut songs: Vec<Song> = self
+            .db
+            .iter()
+            .filter_map(|res| match res {
+                Ok((_, v)) => serde_json::from_slice(&v).ok(),
+                Err(_) => None,
+            })
+            .collect();
+
+        // Sort by `current_index` to ensure ordering
+        songs.sort_by_key(|s| s.current_index);
+
+        // Ensure offset is within bounds
+        if offset >= songs.len() {
+            return Ok(vec![]);
+        }
+
+        // Take the required PAGE_SIZE starting from offset
+        let paged_songs = songs.into_iter().skip(offset).take(PAGE_SIZE).collect();
+
+        Ok(paged_songs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_next_page_consistency() {
+        let mut db = SongDatabase::new().expect("Failed to create database");
+
+        // Add 50 songs
+        for i in 0..50 {
+            db.add_song(
+                format!("Song {}", i),
+                format!("id{}", i),
+                vec![format!("Artist {}", i)],
+            );
+        }
+
+        // First call to next_page(0)
+        let first_page = db.next_page(0).expect("Failed to fetch page");
+        assert_eq!(
+            first_page.len(),
+            PAGE_SIZE,
+            "First page should have PAGE_SIZE songs"
+        );
+
+        // Second call to next_page(0), should return the same results
+        let second_page = db.next_page(0).expect("Failed to fetch page again");
+        assert_eq!(
+            second_page.len(),
+            PAGE_SIZE,
+            "Second page should still have PAGE_SIZE songs"
+        );
+        assert_eq!(first_page, second_page, "Pages should be identical");
+
+        // Fetch next page
+        let third_page = db
+            .next_page(PAGE_SIZE)
+            .expect("Failed to fetch second page");
+        assert_eq!(
+            third_page.len(),
+            PAGE_SIZE,
+            "Second page should also have PAGE_SIZE songs"
+        );
+
+        // Ensure pages don't overlap
+        assert_ne!(first_page, third_page, "Pages should be distinct");
+
+        println!("Test passed: next_page returns consistent and paginated results.");
     }
 }
 

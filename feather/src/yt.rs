@@ -93,10 +93,10 @@ impl YoutubeClient {
     pub async fn fetch_playlist_songs(
         &self,
         playlist_id: PlaylistId,
-    ) -> Result<HashMap<(SongName, SongId), Vec<ArtistName>>, String> {
+    ) -> Result<Vec<((SongName, SongId), Vec<ArtistName>)>, String> {
         match self.client.playlist(playlist_id).await {
             Ok(playlist_data) => {
-                let mut song_map = HashMap::new();
+                let mut song_map = Vec::new();
 
                 for video in playlist_data.videos.items {
                     let song_key = (video.name, video.id);
@@ -106,7 +106,7 @@ impl YoutubeClient {
                         .map(|channel| channel.name)
                         .collect();
 
-                    song_map.insert(song_key, artist_names);
+                    song_map.push((song_key, artist_names));
                 }
 
                 Ok(song_map)
