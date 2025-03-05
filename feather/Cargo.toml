@@ -2,6 +2,7 @@
 name = "feather"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 rustypipe = "0.9.0"
@@ -14,6 +15,8 @@ tempfile = "3.16.0"
 libmpv2 = "4.1.0"
 dirs = "6.0.0"
 
+[build-dependencies]
+pkg-config = "0.3"
 
 [lib]
 name = "feather"
