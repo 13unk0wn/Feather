@@ -301,26 +301,25 @@ impl SeletectPlayListView {
             max_page: Arc::new(Mutex::new(None)),
         }
     }
+
     fn handle_keystrokes(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Right => {
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
                         if let Ok(max_page) = self.max_page.lock() {
-                            let new_offset = (self.offset + PAGE_SIZE).min(max_page.expect("msg"));
-
-                            println!("New offset is {:?}", new_offset);
+                            let total_pages = max_page.unwrap_or(0);
+                            let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
 
                             if new_offset != self.offset {
-                                let iter_db =
-                                    db.next_page(new_offset).expect("Failed to fetch next page");
-                                let mut new_vec = vec![];
-                                for song in iter_db {
-                                    new_vec.push(song);
-                                }
-                                if let Ok(mut content) = self.content.lock() {
-                                    *content = Some(new_vec);
-                                    self.offset = new_offset;
+                                if let Ok(iter_db) = db.next_page(new_offset) {
+                                    let new_vec: Vec<Song> = iter_db.into_iter().collect();
+                                    if !new_vec.is_empty() {
+                                        if let Ok(mut content) = self.content.lock() {
+                                            *content = Some(new_vec);
+                                            self.offset = new_offset;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -330,26 +329,22 @@ impl SeletectPlayListView {
             KeyCode::Left => {
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
-                        let new_offset = (self.offset as i64 - PAGE_SIZE as i64).max(0) as usize;
-
-                        println!("New offset is {:?}", new_offset);
+                        let new_offset = self.offset.saturating_sub(PAGE_SIZE);
 
                         if new_offset != self.offset {
-                            let iter_db =
-                                db.next_page(new_offset).expect("Failed to fetch next page");
-                            let mut new_vec = vec![];
-                            for song in iter_db {
-                                new_vec.push(song);
-                            }
-                            if let Ok(mut content) = self.content.lock() {
-                                *content = Some(new_vec);
-                                self.offset = new_offset;
+                            if let Ok(iter_db) = db.next_page(new_offset) {
+                                let new_vec: Vec<Song> = iter_db.into_iter().collect();
+                                if !new_vec.is_empty() {
+                                    if let Ok(mut content) = self.content.lock() {
+                                        *content = Some(new_vec);
+                                        self.offset = new_offset;
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-
             KeyCode::Char('j') | KeyCode::Down => {
                 // Move selection down
                 self.selected = self.selected.saturating_add(1);
@@ -364,9 +359,9 @@ impl SeletectPlayListView {
             _ => (),
         }
     }
-
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         if let Ok(id) = self.rx_id.try_recv() {
+            self.offset = 0;
             self.selected = 0;
             let backend = self.backend.clone();
             let db = self.db.clone();
@@ -415,7 +410,10 @@ impl SeletectPlayListView {
 
         if let Ok(item) = self.content.lock() {
             if let Some(r) = item.clone() {
-                // self.max_len =  self.max_len.min(r.len());
+                self.max_len = r.len();
+                if self.selected  >= self.max_len{
+                    self.selected = self.max_len - 1;
+                }
                 let items: Vec<ListItem> = r
                     .into_iter()
                     .enumerate()

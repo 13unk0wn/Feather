@@ -1,5 +1,6 @@
 #![allow(unused)]
-use crate::backend::{Backend, Song};
+use feather::database::Song;
+use crate::backend::{Backend};
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::database::HistoryDB;
 use ratatui::prelude::{Buffer, Color, Constraint, Layout, Rect};
@@ -55,7 +56,7 @@ impl History {
             KeyCode::Char('d') => {
                 // Delete selected entry
                 if let Some(song) = &self.selected_song {
-                    let _ = self.history.delete_entry(&song.song_id);
+                    let _ = self.history.delete_entry(&song.id);
                 }
             }
             KeyCode::Enter => {
@@ -111,8 +112,8 @@ impl History {
                     let is_selected = i == self.selected;
                     if is_selected {
                         self.selected_song = Some(Song::new(
-                            item.song_name.clone(),
                             item.song_id.clone(),
+                            item.song_name.clone(),
                             item.artist_name.clone(),
                         ));
                     }

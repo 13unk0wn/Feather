@@ -29,6 +29,7 @@ use tokio::{
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
+   
     let terminal = ratatui::init();
     let _app = App::new().render(terminal).await;
     ratatui::restore();
@@ -71,12 +72,12 @@ impl App<'_> {
         let get_cookies = env::var("FEATHER_COOKIES").ok(); // Fetch cookies from environment variables if available.
         let backend = Arc::new(Backend::new(history.clone(), get_cookies).unwrap());
         let (tx, rx) = mpsc::channel(32);
-        let search   =  Search::new(backend.clone(), tx.clone());
-        let playlist_search  = PlayListSearch::new(backend.clone());
+        let search = Search::new(backend.clone(), tx.clone());
+        let playlist_search = PlayListSearch::new(backend.clone());
 
         App {
             state: State::Global,
-            search: SearchMain::new(search,playlist_search),
+            search: SearchMain::new(search, playlist_search),
             history: History::new(history, backend.clone(), tx.clone()),
             help: Help::new(),
             // user_playlist: UserPlaylist {},
@@ -163,7 +164,7 @@ impl App<'_> {
 
                     // Background for the whole UI
                     frame.render_widget(
-                        Block::default().style(Style::default().bg(Color::Rgb(0, 39, 44))),
+                        Block::default().style(Style::default().bg(Color::Rgb(10, 10, 30))),
                         area,
                     );
 

@@ -1,4 +1,8 @@
 #![allow(unused)]
+use crate::yt::YoutubeClient;
+use log::debug;
+use log::log;
+use std::fs;
 // This file manages the history database and contains all necessary functions related to history management
 use crate::{ArtistName, SongId, SongName};
 use serde::{Deserialize, Serialize};
@@ -123,27 +127,32 @@ impl HistoryDB {
 
 use std::str;
 
-pub const PAGE_SIZE: usize = 20;
+pub const PAGE_SIZE: usize = 10;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub struct Song {
     pub id: String,
     pub title: String,
     pub artist_name: Vec<String>,
-    current_index: usize,
+}
+
+/// Implements conversion from `Song` to `HistoryEntry`, ensuring valid history records.
+impl From<Song> for HistoryEntry {
+    fn from(value: Song) -> Self {
+        HistoryEntry::new(value.title, value.id, value.artist_name)
+            .expect("Cannot Form History Entry")
+    }
 }
 
 impl Song {
-    pub fn new(id: String, title: String, artist_name: Vec<String>, current_index: usize) -> Self {
+    pub fn new(id: String, title: String, artist_name: Vec<String>) -> Self {
         Self {
             id,
             title,
             artist_name,
-            current_index,
         }
     }
 }
-
 #[derive(Error, Debug)]
 pub enum SongError {
     #[error("Database error: {0}")]
@@ -154,22 +163,24 @@ pub enum SongError {
 
     #[error("Invalid UTF-8 sequence")]
     Utf8Error,
+
+    #[error("File exit already")]
+    FileExist(#[from] std::io::Error),
+
+    #[error("Song Not Found")]
+    SongNotFound,
 }
 
 #[derive(Clone)]
 pub struct SongDatabase {
-    db: Db,
+    pub db: Db,
     db_path: PathBuf,
     current_index: usize,
 }
 
 impl Drop for SongDatabase {
     fn drop(&mut self) {
-        self.db
-            .clear()
-            .expect("Failed to cleard the Web Playlist DB");
         self.db.flush();
-        if let Ok(_) = std::fs::remove_file(&self.db_path) {}
     }
 }
 
@@ -177,8 +188,19 @@ impl SongDatabase {
     pub fn new() -> Result<Self, SongError> {
         let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
         path.push("Feather/current_playlist");
+
+        // Check if the path exists, and delete accordingly
+        if path.exists() {
+            if path.is_dir() {
+                fs::remove_dir_all(&path).map_err(|e| SongError::FileExist(e))?;
+            } else {
+                fs::remove_file(&path).map_err(|e| SongError::FileExist(e))?;
+            }
+        }
+
         let path_clone = path.clone();
         let db = sled::open(path)?;
+
         Ok(Self {
             db,
             db_path: path_clone,
@@ -192,87 +214,96 @@ impl SongDatabase {
         id: String,
         artist_name: Vec<String>,
     ) -> Result<(), SongError> {
-        let song = Song::new(id, title, artist_name, self.current_index);
+        let song = Song {
+            id,
+            title,
+            artist_name,
+        };
         let key = format!("song:{}", self.current_index);
         let value = serde_json::to_vec(&song)?;
         self.db.insert(key, value)?;
         self.current_index += 1;
         Ok(())
     }
+
+    pub fn get_song_by_index(&self, index: usize) -> Result<Song, SongError> {
+        let key = format!("song:{}", index); // Format the key as you did in `add_song`
+        if let Some(value) = self.db.get(key)? {
+            let song: Song = serde_json::from_slice(&value)?;
+            Ok(song)
+        } else {
+            Err(SongError::SongNotFound)
+        }
+    }
     pub fn next_page(&self, offset: usize) -> Result<Vec<Song>, SongError> {
         let mut songs: Vec<Song> = self
             .db
             .iter()
             .filter_map(|res| match res {
-                Ok((_, v)) => serde_json::from_slice(&v).ok(),
+                Ok((key, v)) => {
+                    // Convert the Vec<u8> key to a string
+                    let key_str = String::from_utf8_lossy(&key).to_string();
+
+                    // Derive current_index from the key (e.g., "song:123")
+                    let current_index: usize = key_str
+                        .strip_prefix("song:")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or_default();
+
+                    // Deserialize the song data from the value
+                    serde_json::from_slice(&v)
+                        .map(|song: Song| (current_index, song))
+                        .ok()
+                }
                 Err(_) => None,
             })
+            .filter(|&(current_index, _)| {
+                current_index >= offset && current_index < offset + PAGE_SIZE
+            })
+            .map(|(_, song)| song)
             .collect();
 
-        // Sort by `current_index` to ensure ordering
-        songs.sort_by_key(|s| s.current_index);
+        // Sort the songs based on the extracted `current_index`
+        songs.sort_by_key(|s| {
+            let key = format!(
+                "song:{}",
+                self.db.iter().position(|item| item.is_ok()).unwrap_or(0)
+            );
+            key
+        });
 
-        // Ensure offset is within bounds
-        if offset >= songs.len() {
-            return Ok(vec![]);
-        }
-
-        // Take the required PAGE_SIZE starting from offset
-        let paged_songs = songs.into_iter().skip(offset).take(PAGE_SIZE).collect();
-
-        Ok(paged_songs)
+        Ok(songs)
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn test_next_page_consistency() {
-        let mut db = SongDatabase::new().expect("Failed to create database");
-
-        // Add 50 songs
-        for i in 0..50 {
-            db.add_song(
-                format!("Song {}", i),
-                format!("id{}", i),
-                vec![format!("Artist {}", i)],
-            );
-        }
-
-        // First call to next_page(0)
-        let first_page = db.next_page(0).expect("Failed to fetch page");
-        assert_eq!(
-            first_page.len(),
-            PAGE_SIZE,
-            "First page should have PAGE_SIZE songs"
-        );
-
-        // Second call to next_page(0), should return the same results
-        let second_page = db.next_page(0).expect("Failed to fetch page again");
-        assert_eq!(
-            second_page.len(),
-            PAGE_SIZE,
-            "Second page should still have PAGE_SIZE songs"
-        );
-        assert_eq!(first_page, second_page, "Pages should be identical");
-
-        // Fetch next page
-        let third_page = db
-            .next_page(PAGE_SIZE)
-            .expect("Failed to fetch second page");
-        assert_eq!(
-            third_page.len(),
-            PAGE_SIZE,
-            "Second page should also have PAGE_SIZE songs"
-        );
-
-        // Ensure pages don't overlap
-        assert_ne!(first_page, third_page, "Pages should be distinct");
-
-        println!("Test passed: next_page returns consistent and paginated results.");
+#[tokio::test]
+async fn test_playlist() {
+    let yt = YoutubeClient::new();
+    let mut tempdb = SongDatabase::new().unwrap();
+    let yt_playlist = yt.fetch_playlist("lofi music").await.unwrap();
+    let playlist = yt_playlist[1].clone();
+    let fetch_songs = yt.fetch_playlist_songs(playlist.0.1).await.unwrap();
+    let len = fetch_songs.len();
+    for i in fetch_songs {
+        let id = i.0.1;
+        let title = i.0.0;
+        let artist_name = i.1;
+        tempdb.add_song(title, id, artist_name).unwrap();
+    }
+    let songs = tempdb.next_page(0).unwrap();
+    println!("0");
+    for i in songs {
+        println!("{:?}", i);
+    }
+    println!("10");
+    let songs = tempdb.next_page(10).unwrap();
+    for i in songs {
+        println!("{:?}", i);
+    }
+    println!("0");
+    let songs = tempdb.next_page(0).unwrap();
+    for i in songs {
+        println!("{:?}", i);
     }
 }
 

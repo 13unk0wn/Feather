@@ -14,10 +14,10 @@ pub struct YoutubeClient {
 
 impl YoutubeClient {
     /// Creates a new instance of `YoutubeClient`.
-    pub fn new() -> Self {
+    pub fn new(visitory_data  : Option<String>) -> Self {
         let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
         path.push("Feather");
-        let rp = RustyPipe::builder().storage_dir(path).build().unwrap();
+        let rp = RustyPipe::builder().visitor_data_opt(visitory_data).storage_dir(path).build().unwrap();
         let client = rp.query();
         YoutubeClient { client }
     }

@@ -1,4 +1,5 @@
-use crate::backend::{Backend, Song};
+use feather::database::Song;
+use crate::backend::{Backend};
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::{ArtistName, SongId, SongName};
 use ratatui::{

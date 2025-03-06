@@ -1,6 +1,8 @@
+#![allow(unused)]
+use feather::database::SongError;
 use feather::{
     ArtistName, SongId, SongName,
-    database::{HistoryDB, HistoryEntry},
+    database::{HistoryDB, HistoryEntry, SongDatabase,Song},
     player::{MpvError, Player},
     yt::YoutubeClient,
 };
@@ -20,31 +22,8 @@ pub struct Backend {
 }
 
 /// Represents a song with its name, ID, and artist(s).
-#[derive(Clone)]
-pub struct Song {
-    pub song_name: SongName,      // Name of the song
-    pub song_id: SongId,          // Unique identifier for the song
-    artist_name: Vec<ArtistName>, // List of artists performing the song
-}
 
-/// Implements conversion from `Song` to `HistoryEntry`, ensuring valid history records.
-impl From<Song> for HistoryEntry {
-    fn from(value: Song) -> Self {
-        HistoryEntry::new(value.song_name, value.song_id, value.artist_name)
-            .expect("Cannot Form History Entry")
-    }
-}
 
-impl Song {
-    /// Creates a new `Song` instance.
-    pub fn new(song_name: SongName, song_id: SongId, artist_name: Vec<ArtistName>) -> Self {
-        Self {
-            song_name,
-            song_id,
-            artist_name,
-        }
-    }
-}
 
 /// Defines possible errors that can occur in the `Backend`.
 #[derive(Error, Debug)]
@@ -63,6 +42,9 @@ pub enum BackendError {
 
     #[error("Playback error: {0}")]
     PlaybackError(String), // Error related to playback issues
+
+    #[error("Playlist error : {0}")]
+    PlaylistError(#[from] SongError)
 }
 
 impl Backend {
@@ -76,12 +58,36 @@ impl Backend {
     /// * `Result<Self, BackendError>` - Returns `Backend` on success or an error on failure.
     pub fn new(history: Arc<HistoryDB>, cookies: Option<String>) -> Result<Self, BackendError> {
         Ok(Self {
-            yt: YoutubeClient::new(),
+            yt: YoutubeClient::new(cookies.clone()),
             player: Player::new(cookies).map_err(BackendError::Mpv)?,
             history,
             song: Mutex::new(None),
         })
     }
+
+    async fn play_playlist(
+    &self,
+    current_playlist: Arc<Mutex<Option<SongDatabase>>>,
+    selected_song: Option<usize>,
+) -> Result<(), BackendError> {
+    let selected_id = selected_song.unwrap_or(0);
+    
+    // Lock the playlist to get the song
+    if let Ok(mut playlist) = current_playlist.lock() {
+        if let Some(p) = playlist.take() { // Take the playlist out of the Option
+            // Get the song, and release the lock here
+            let song = p.get_song_by_index(selected_id)?;
+            
+            // Now that we have the song, release the lock and play music asynchronously
+            drop(playlist); // Explicitly drop the lock here
+            
+            // Play the song
+            self.play_music(song).await?;
+        }
+    }
+    Ok(())
+}
+
 
     /// Plays a song by fetching its URL from YouTube and passing it to the player.
     ///
@@ -91,8 +97,9 @@ impl Backend {
     /// # Returns
     /// * `Result<(), BackendError>` - Returns `Ok(())` on success or an error on failure.
     pub async fn play_music(&self, song: Song) -> Result<(), BackendError> {
+        println!("playing song");
         const MAX_RETRIES: i32 = 8;
-        let id = song.song_id.to_string();
+        let id = song.id.to_string();
 
         // Fetch song URL with retry mechanism
         let url = {
@@ -106,6 +113,7 @@ impl Backend {
                         continue;
                     }
                     Err(e) => {
+                        println!("failed to get url");
                         return Err(BackendError::YoutubeFetch(format!(
                             "Failed to fetch URL after {} attempts: {:?}",
                             MAX_RETRIES, e
@@ -114,6 +122,7 @@ impl Backend {
                 }
             }
         };
+        println!("able to get url");
 
         // Update the currently playing song in a mutex-protected section
         {

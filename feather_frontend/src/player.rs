@@ -1,4 +1,5 @@
-use crate::backend::{Backend, Song};
+use feather::database::Song;
+use crate::backend::{Backend};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::{Alignment, Buffer, Rect};
 use ratatui::style::{Modifier, Style};
@@ -188,7 +189,7 @@ impl SongPlayer {
                                     .unwrap_or_default();
                                 vec![
                                     Line::from(Span::styled(
-                                        song.song.song_name.clone(),
+                                        song.song.title.clone(),
                                         Style::default().add_modifier(Modifier::BOLD),
                                     )),
                                     Line::from(format!("{}/{}", current_time, song.total_duration)),
