@@ -309,45 +309,29 @@ impl SeletectPlayListView {
     }
 
     fn handle_keystrokes(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Char('p') => {
-                let database = self.db.clone();
-                let tx_send = self.tx_playlist.clone();
-                tokio::spawn(async move {
-                    if let Ok(db) = database.lock() {
-                        if let Some(db) = db.clone() {
-                            println!("send");
-                            tx_send.send(Arc::new(Mutex::new(db)));
-                        }
-                    }
-                });
-            }
-            KeyCode::Right => {
-                if let Ok(db) = self.db.lock() {
-                    if let Some(db) = db.clone() {
-                        if let Ok(max_page) = self.max_page.lock() {
-                            let total_pages = max_page.unwrap_or(0);
-                            let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
-
-                            if new_offset != self.offset {
-                                if let Ok(iter_db) = db.next_page(new_offset) {
-                                    let new_vec: Vec<Song> = iter_db.into_iter().collect();
-                                    if !new_vec.is_empty() {
-                                        if let Ok(mut content) = self.content.lock() {
-                                            *content = Some(new_vec);
-                                            self.offset = new_offset;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+    match key.code {
+        KeyCode::Char('p') => {
+            let db = self.db.clone();
+            let backend = self.backend.clone();
+            tokio::spawn(async move {
+                // Extract the SongDatabase before awaiting
+                let db_inner = {
+                    let db_guard = db.lock().expect("Failed to lock db");
+                    db_guard.clone() // Clone the Option<SongDatabase>
+                };
+                
+                if let Some(db_inner) = db_inner {
+                    backend.play_playlist(db_inner, 0).await;
+                    println!("-------------------Send------------------");
                 }
-            }
-            KeyCode::Left => {
-                if let Ok(db) = self.db.lock() {
-                    if let Some(db) = db.clone() {
-                        let new_offset = self.offset.saturating_sub(PAGE_SIZE);
+            });
+        }
+        KeyCode::Right => {
+            if let Ok(db) = self.db.lock() {
+                if let Some(db) = db.clone() {
+                    if let Ok(max_page) = self.max_page.lock() {
+                        let total_pages = max_page.unwrap_or(0);
+                        let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
 
                         if new_offset != self.offset {
                             if let Ok(iter_db) = db.next_page(new_offset) {
@@ -363,20 +347,41 @@ impl SeletectPlayListView {
                     }
                 }
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                // Move selection down
-                self.selected = self.selected.saturating_add(1);
-                self.selected = self.selected.min(self.max_len - 1);
-                self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                // Move selection up
-                self.selected = self.selected.saturating_sub(1);
-                self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
-            }
-            _ => (),
         }
+        KeyCode::Left => {
+            if let Ok(db) = self.db.lock() {
+                if let Some(db) = db.clone() {
+                    let new_offset = self.offset.saturating_sub(PAGE_SIZE);
+
+                    if new_offset != self.offset {
+                        if let Ok(iter_db) = db.next_page(new_offset) {
+                            let new_vec: Vec<Song> = iter_db.into_iter().collect();
+                            if !new_vec.is_empty() {
+                                if let Ok(mut content) = self.content.lock() {
+                                    *content = Some(new_vec);
+                                    self.offset = new_offset;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            // Move selection down
+            self.selected = self.selected.saturating_add(1);
+            self.selected = self.selected.min(self.max_len - 1);
+            self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            // Move selection up
+            self.selected = self.selected.saturating_sub(1);
+            self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
+        }
+        _ => (),
     }
+}
+
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         if let Ok(id) = self.rx_id.try_recv() {
             self.offset = 0;

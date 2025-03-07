@@ -55,69 +55,7 @@ impl SongPlayer {
         player
     }
 
-    fn play_playlist(&mut self, song: Arc<Mutex<SongDatabase>>, index: usize) {
-        self.playlist = Some(song);
-        if let Some(playlist) = &self.playlist {
-            if let Ok(playlist) = playlist.lock() {
-                let song = playlist.get_song_by_index(index);
-                drop(playlist);
-                let backend = self.backend.clone();
-                tokio::spawn(async move {
-                    if let Ok(song) = song {
-                        backend.play_music(song, true).await;
-                    }
-                });
-                if let Ok(mut i)  = self.current_index_playlist.lock(){
-                   *i = index;
-                }
-            }
-        }
-    }
-
-    fn next_song_playlist(&mut self) {
-        if let Some(playlist) = &self.playlist {
-            if let Ok(playlist) = playlist.lock() {
-                let len = playlist.db.len();
-                if let Ok(mut current_index_playlist) = self.current_index_playlist.lock(){
-                *current_index_playlist+=1;
-                *current_index_playlist%=len;
-                let get_song = playlist.get_song_by_index(*current_index_playlist);
-
-                drop(playlist);
-                drop(current_index_playlist);
-                if let Ok(song) = get_song{
-                    let backend = self.backend.clone();
-                    tokio::spawn(async move{
-                        backend.play_music(song, true).await;
-                        println!("playing song");
-                    });
-                }  
-            }
-            }
-        }
-    }
-    fn prev_song_playlist(&mut self) {
-        if let Some(playlist) = &self.playlist {
-            if let Ok(playlist) = playlist.lock() {
-                if let Ok(mut current_index_playlist) = self.current_index_playlist.lock(){
-
-                if *current_index_playlist  >  0{
-                    *current_index_playlist-=1;
-                }
-
-                let get_song = playlist.get_song_by_index(*current_index_playlist);
-                drop(playlist);
-                drop(current_index_playlist);
-                if let Ok(song) = get_song{
-                    let backend = self.backend.clone();
-                    tokio::spawn(async move{
-                        backend.play_music(song, true).await;
-                    });
-                }  
-            }
-            }
-        }
-    }
+   
 
     // Function to continuously update the current playback time
     fn observe_time(&self) {
@@ -227,11 +165,6 @@ impl SongPlayer {
     // Render the player UI
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         // Check for playback event signals
-
-        if let Ok(playlist) =  self.rx_playlist.try_recv(){
-            println!("Recieved");
-            self.play_playlist(playlist, 0);
-        }
         if let Ok(is_playlist) = self.rx.try_recv() {
             if is_playlist {
                 self.is_playlist = true;
