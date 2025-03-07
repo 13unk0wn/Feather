@@ -21,7 +21,6 @@ pub struct History {
     max_len: usize,                        // Total number of history items
     selected_song: Option<Song>,           // Currently selected song details
     backend: Arc<Backend>,                 // Audio backend for playback
-    tx_player: mpsc::Sender<bool>,         // Channel to communicate with player
 }
 
 impl History {
@@ -29,7 +28,6 @@ impl History {
     pub fn new(
         history: Arc<HistoryDB>,
         backend: Arc<Backend>,
-        tx_player: mpsc::Sender<bool>,
     ) -> Self {
         Self {
             history,
@@ -38,7 +36,6 @@ impl History {
             max_len: 0,
             selected_song: None,
             backend,
-            tx_player,
         }
     }
 
@@ -63,11 +60,9 @@ impl History {
                 // Play selected song
                 if let Some(song) = self.selected_song.clone() {
                     let backend = Arc::clone(&self.backend);
-                    let tx_player = self.tx_player.clone();
                     tokio::spawn(async move {
                         // Spawn async task for playback
-                        if backend.play_music(song).await.is_ok() {
-                            let _ = tx_player.send(true).await;
+                        if backend.play_music(song,false).await.is_ok() {
                         }
                     });
                 }

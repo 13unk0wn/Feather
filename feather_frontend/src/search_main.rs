@@ -1,6 +1,11 @@
 #![allow(unused)]
+use std::sync::Arc;
+use std::sync::Mutex;
+use tokio::sync::mpsc;
+
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use feather::database::SongDatabase;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
 use ratatui::prelude::Rect;

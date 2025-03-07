@@ -31,7 +31,6 @@ pub struct Search<'a> {
     query: String,          // Current search query text
     tx: mpsc::Sender<Result<Vec<((String, String), Vec<String>)>, String>>, // Sender for search results
     rx: mpsc::Receiver<Result<Vec<((String, String), Vec<String>)>, String>>, // Receiver for search results
-    tx_player: mpsc::Sender<bool>, // Channel to communicate with player
     backend: Arc<Backend>,         // Audio backend for search and playback
     vertical_scroll_state: ScrollbarState, // Vertical scrollbar state
     display_content: bool,         // Flag to show search results
@@ -43,7 +42,7 @@ pub struct Search<'a> {
 
 impl Search<'_> {
     // Constructor initializing the Search struct
-    pub fn new(backend: Arc<Backend>, tx_player: mpsc::Sender<bool>) -> Self {
+    pub fn new(backend: Arc<Backend>) -> Self {
         let (tx, rx) = mpsc::channel(32); // Create channel for async search results
         Self {
             query: String::new(),
@@ -51,7 +50,6 @@ impl Search<'_> {
             textarea: TextArea::default(),
             tx,
             rx,
-            tx_player,
             backend,
             vertical_scroll_state: ScrollbarState::default(),
             display_content: false,
@@ -121,10 +119,9 @@ impl Search<'_> {
                     // Play selected song
                     if let Some(song) = self.selected_song.clone() {
                         let backend = self.backend.clone();
-                        let tx_player = self.tx_player.clone();
                         tokio::spawn(async move {
-                            let _ = backend.play_music(song).await.is_ok();
-                            let _ = tx_player.send(true).await;
+                            let _ = backend.play_music(song,false).await.is_ok();
+                            // let _ = tx_player.send(true).await;
                         });
                     }
                 }
@@ -193,7 +190,7 @@ impl Search<'_> {
                             // Format results
                             let style = if i == self.selected {
                                 self.selected_song =
-                                    Some(Song::new(song.clone(), songid.clone(), artists.clone()));
+                                    Some(Song::new(songid.clone(), song.clone(), artists.clone()));
                                 Style::default().fg(Color::Yellow).bg(Color::Blue)
                             } else {
                                 Style::default()

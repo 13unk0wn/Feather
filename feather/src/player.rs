@@ -1,4 +1,5 @@
-use libmpv2::Mpv; // We are not using libmpv library because it was requiring user to install an old version which was not available in many distros so we decided to opt for libmpv2 which is a fork of it
+use libmpv2::Mpv;
+// We are not using libmpv library because it was requiring user to install an old version which was not available in many distros so we decided to opt for libmpv2 which is a fork of it
 use std::sync::Arc;
 
 /// The `Player` struct represents a media player using the MPV library.
@@ -43,9 +44,9 @@ impl Player {
         // mpv.set_property("demuxer-readahead-secs", 1)?; // Reduced to 1 second
         //mpv.set_property("demuxer-max-bytes", 512 * 1024)?; // 512 KB max buffer
 
+        mpv.set_property("ytdl", true)?;
         // Configure network request headers for YouTube playback
         mpv.set_property("ytdl-raw-options", "no-check-certificate=")?;
-        mpv.set_property("loop", "inf")?; // Looping enabled (to be removed with autoplay)
         mpv.set_property(
             "http-header-fields",
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -61,9 +62,9 @@ impl Player {
 
     /// Loads and plays a media file from a given URL.
     pub fn play(&self, url: &str) -> Result<(), MpvError> {
-         if let Ok(true) = self.player.get_property("pause") {
+        if let Ok(true) = self.player.get_property("pause") {
             self.unpause()?;
-        } // Quick fix will improve 
+        } // Quick fix will improve
         self.player.command("loadfile", &[url])?; // Replace the current playback
         Ok(())
     }
@@ -71,6 +72,16 @@ impl Player {
     /// Pauses playback.
     pub fn pause(&self) -> Result<(), MpvError> {
         self.player.command("set", &["pause", "yes"])?;
+        Ok(())
+    }
+
+    pub fn set_loop(&self) -> Result<(), MpvError> {
+        self.player.set_property("loop", "inf")?; // Looping enabled (to be removed with autoplay)
+        Ok(())
+    }
+
+    pub fn remove_loop(&self) -> Result<(), MpvError> {
+        self.player.set_property("loop", "no")?;
         Ok(())
     }
 
@@ -123,4 +134,11 @@ impl Player {
         let pause: bool = self.player.get_property("pause")?;
         Ok(!pause)
     }
+}
+
+#[test]
+fn test_play() {
+    let link = "https://music.youtube.com/watch?v=U4mADkt6o-M";
+    let mpv = Player::new(None).unwrap();
+    let _ = mpv.play(&link);
 }

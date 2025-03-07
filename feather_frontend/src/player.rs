@@ -1,6 +1,8 @@
-use feather::database::Song;
-use crate::backend::{Backend};
+#![allow(unused)]
+use crate::backend::Backend;
+use crate::playlist_search;
 use crossterm::event::{KeyCode, KeyEvent};
+use feather::database::{Song, SongDatabase};
 use ratatui::prelude::{Alignment, Buffer, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -23,7 +25,7 @@ pub struct SongDetails {
     song: Song,             // Information about the song
     current_time: String,   // Current playback time (formatted as MM:SS)
     total_duration: String, // Total duration of the song
-    tries :  usize,
+    tries: usize,
 }
 
 pub struct SongPlayer {
@@ -31,18 +33,90 @@ pub struct SongPlayer {
     songstate: Arc<Mutex<SongState>>, // Current state of the player (Idle, Playing, etc.)
     song_playing: Arc<Mutex<Option<SongDetails>>>, // Details of the currently playing song
     rx: mpsc::Receiver<bool>,         // Receiver to listen for playback events
+    playlist: Option<Arc<Mutex<SongDatabase>>>,
+    current_index_playlist: Arc<Mutex<usize>>,
+    is_playlist: bool,
+    rx_playlist :  mpsc::Receiver<Arc<Mutex<SongDatabase>>>,
 }
 
 impl SongPlayer {
-    pub fn new(backend: Arc<Backend>, rx: mpsc::Receiver<bool>) -> Self {
+    pub fn new(backend: Arc<Backend>, rx: mpsc::Receiver<bool>,rx_playlist :  mpsc::Receiver<Arc<Mutex<SongDatabase>>>) -> Self {
         let player = Self {
             backend,
             songstate: Arc::new(Mutex::new(SongState::Idle)),
             song_playing: Arc::new(Mutex::new(None)),
             rx,
+            playlist: None,
+            is_playlist: false,
+            current_index_playlist: Arc::new(Mutex::new(0)),
+            rx_playlist,
         };
         player.observe_time(); // Start observing playback time
         player
+    }
+
+    fn play_playlist(&mut self, song: Arc<Mutex<SongDatabase>>, index: usize) {
+        self.playlist = Some(song);
+        if let Some(playlist) = &self.playlist {
+            if let Ok(playlist) = playlist.lock() {
+                let song = playlist.get_song_by_index(index);
+                drop(playlist);
+                let backend = self.backend.clone();
+                tokio::spawn(async move {
+                    if let Ok(song) = song {
+                        backend.play_music(song, true).await;
+                    }
+                });
+                if let Ok(mut i)  = self.current_index_playlist.lock(){
+                   *i = index;
+                }
+            }
+        }
+    }
+
+    fn next_song_playlist(&mut self) {
+        if let Some(playlist) = &self.playlist {
+            if let Ok(playlist) = playlist.lock() {
+                let len = playlist.db.len();
+                if let Ok(mut current_index_playlist) = self.current_index_playlist.lock(){
+                *current_index_playlist+=1;
+                *current_index_playlist%=len;
+                let get_song = playlist.get_song_by_index(*current_index_playlist);
+
+                drop(playlist);
+                drop(current_index_playlist);
+                if let Ok(song) = get_song{
+                    let backend = self.backend.clone();
+                    tokio::spawn(async move{
+                        backend.play_music(song, true).await;
+                        println!("playing song");
+                    });
+                }  
+            }
+            }
+        }
+    }
+    fn prev_song_playlist(&mut self) {
+        if let Some(playlist) = &self.playlist {
+            if let Ok(playlist) = playlist.lock() {
+                if let Ok(mut current_index_playlist) = self.current_index_playlist.lock(){
+
+                if *current_index_playlist  >  0{
+                    *current_index_playlist-=1;
+                }
+
+                let get_song = playlist.get_song_by_index(*current_index_playlist);
+                drop(playlist);
+                drop(current_index_playlist);
+                if let Ok(song) = get_song{
+                    let backend = self.backend.clone();
+                    tokio::spawn(async move{
+                        backend.play_music(song, true).await;
+                    });
+                }  
+            }
+            }
+        }
     }
 
     // Function to continuously update the current playback time
@@ -51,6 +125,7 @@ impl SongPlayer {
         let song_playing = Arc::clone(&self.song_playing);
 
         tokio::task::spawn(async move {
+            let _ = tokio::time::sleep(Duration::from_secs(2)).await;
             loop {
                 // Try to get the current playback position from MPV
                 match backend.player.player.get_property::<f64>("time-pos") {
@@ -93,73 +168,77 @@ impl SongPlayer {
         }
     }
 
-    // Function to check whether a song is playing
     fn check_playing(&mut self) {
-        let songstate = Arc::clone(&self.songstate);
-        let backend = Arc::clone(&self.backend);
-        let song_playing = Arc::clone(&self.song_playing);
+    let songstate = Arc::clone(&self.songstate);
+    let backend = Arc::clone(&self.backend);
+    let playlist = self.playlist.clone();
+    let current_index = Arc::clone(&self.current_index_playlist); // Clone it
 
-        task::spawn(async move {
-            const MAX_IDLE_COUNT: i32 = 5; // Max checks before considering it an error
-            let mut idle_count = 0;
+    task::spawn(async move {
+        const MAX_IDLE_COUNT: i32 = 5;
+        let mut idle_count = 0;
 
-            // Initial delay before checking playback status
-            tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
-            loop {
-                match backend.player.is_playing() {
-                    Ok(true) => {
-                        if let Ok(mut state) = songstate.lock() {
-                            if let Ok(mut song_lock) = song_playing.lock() {
-                                if let Ok(song) = backend.song.lock() {
-                                    if let Some(value) = song.as_ref() {
-                                        let total_duration = backend
-                                            .player
-                                            .duration()
-                                            .parse::<f64>()
-                                            .map(|d| {
-                                                let total = d as i64;
-                                                format!("{:02}:{:02}", total / 60, total % 60)
-                                            })
-                                            .unwrap_or_default();
-                                        *song_lock = Some(SongDetails {
-                                            song: value.clone(),
-                                            current_time: backend.player.get_current_time(),
-                                            total_duration,
-                                            tries :  0,
-                                        });
-                                        *state = SongState::Playing;
-                                        return; // Exit once playing is confirmed
-                                    }
-                                }
-                            }
-                        }
-                        idle_count = 0; // Reset idle count since the song is playing
-                    }
-                    Ok(false) => {
-                        // Song is not playing, set state to Idle
-                        idle_count += 1;
-                    }
-                    Err(_) => idle_count += 1, // Increase idle count if an error occurs
+        loop {
+            match backend.player.is_playing() {
+                Ok(true) => {
+                    idle_count = 0;
                 }
-
-                // If too many idle checks, assume an error occurred
-                if idle_count >= MAX_IDLE_COUNT {
-                    if let Ok(mut state) = songstate.lock() {
-                        if *state == SongState::Loading {
-                            *state = SongState::ErrorPlayingoSong;
-                        }
-                    }
+                Ok(false) | Err(_) => {
+                    idle_count += 1;
                 }
-                tokio::time::sleep(Duration::from_secs(2)).await; // Check every 2 seconds
             }
-        });
-    }
+
+            if idle_count >= MAX_IDLE_COUNT {
+                if let Some(playlist) = &playlist {
+                    let len = playlist.lock().unwrap().db.len();
+
+                    let mut index = current_index.lock().unwrap();
+                    *index = (*index + 1) % len; // Update index
+
+                    drop(index); // Explicitly drop to avoid deadlock
+                }
+
+                if let Ok(mut state) = songstate.lock() {
+                    *state = SongState::Idle;
+                }
+
+                // Play next song
+                if let Some(playlist) = &playlist {
+                    let playlist = playlist.lock().unwrap();
+                    let new_index = *current_index.lock().unwrap();
+                    if let Ok(song) = playlist.get_song_by_index(new_index) {
+                        let backend = backend.clone();
+                        tokio::spawn(async move {
+                            backend.play_music(song, true).await;
+                        });
+                    }
+                }
+                return;
+            }
+
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+    });
+}
+
 
     // Render the player UI
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         // Check for playback event signals
-        if self.rx.try_recv().is_ok() {
+
+        if let Ok(playlist) =  self.rx_playlist.try_recv(){
+            println!("Recieved");
+            self.play_playlist(playlist, 0);
+        }
+        if let Ok(is_playlist) = self.rx.try_recv() {
+            if is_playlist {
+                self.is_playlist = true;
+            } else {
+                let _ = self.playlist.take();
+                self.is_playlist = false;
+            }
             if let Ok(mut state) = self.songstate.lock() {
                 *state = SongState::Loading;
             }
@@ -178,9 +257,9 @@ impl SongPlayer {
                         song_playing.as_mut().map_or_else(
                             || vec![Line::from("Loading...")],
                             |song| {
-                                if song.tries < 3 && song.total_duration == "00::00"{
-                                    song.total_duration = self.backend.player.duration(); 
-                                    song.tries+=1;
+                                if song.tries < 3 && song.total_duration == "00::00" {
+                                    song.total_duration = self.backend.player.duration();
+                                    song.tries += 1;
                                 }
                                 let current_time = song
                                     .current_time

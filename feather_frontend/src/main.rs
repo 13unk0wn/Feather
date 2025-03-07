@@ -19,6 +19,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     widgets::{Block, Borders, Paragraph, Widget},
 };
+use std::arch::x86_64::_mm256_castpd256_pd128;
 use std::{env, sync::Arc};
 use tokio::{
     sync::mpsc,
@@ -70,20 +71,21 @@ impl App<'_> {
     fn new() -> Self {
         let history = Arc::new(HistoryDB::new().unwrap());
         let get_cookies = env::var("FEATHER_COOKIES").ok(); // Fetch cookies from environment variables if available.
-        let backend = Arc::new(Backend::new(history.clone(), get_cookies).unwrap());
         let (tx, rx) = mpsc::channel(32);
-        let search = Search::new(backend.clone(), tx.clone());
-        let playlist_search = PlayListSearch::new(backend.clone());
+        let (tx_playlist,rx_playlist) = mpsc::channel(500);
+        let backend = Arc::new(Backend::new(history.clone(), get_cookies,tx.clone()).unwrap());
+        let search = Search::new(backend.clone());
+        let playlist_search = PlayListSearch::new(backend.clone(),tx_playlist);
 
         App {
             state: State::Global,
             search: SearchMain::new(search, playlist_search),
-            history: History::new(history, backend.clone(), tx.clone()),
+            history: History::new(history, backend.clone()),
             help: Help::new(),
             // user_playlist: UserPlaylist {},
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
-            player: SongPlayer::new(backend.clone(), rx),
+            player: SongPlayer::new(backend.clone(), rx,rx_playlist),
             // backend,
             help_mode: false,
             exit: false,

@@ -42,11 +42,11 @@ pub struct PlayListSearch<'a> {
 }
 
 impl<'a> PlayListSearch<'a> {
-    pub fn new(backend: Arc<Backend>) -> Self {
+    pub fn new(backend: Arc<Backend>, tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>) -> Self {
         let (tx_id, rx_id) = mpsc::channel(32);
         Self {
             search: PlayListSearchComponent::new(backend.clone(), tx_id),
-            view: SeletectPlayListView::new(rx_id, backend),
+            view: SeletectPlayListView::new(rx_id, backend, tx_playlist),
             state: PlayListSearchState::Search,
         }
     }
@@ -285,10 +285,15 @@ struct SeletectPlayListView {
     max_len: usize,
     offset: usize,
     max_page: Arc<Mutex<Option<usize>>>,
+    tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
 }
 
 impl SeletectPlayListView {
-    fn new(rx_id: mpsc::Receiver<String>, backend: Arc<Backend>) -> Self {
+    fn new(
+        rx_id: mpsc::Receiver<String>,
+        backend: Arc<Backend>,
+        tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+    ) -> Self {
         Self {
             rx_id,
             content: Arc::new(Mutex::new(None)),
@@ -299,11 +304,24 @@ impl SeletectPlayListView {
             max_len: PAGE_SIZE,
             offset: 0,
             max_page: Arc::new(Mutex::new(None)),
+            tx_playlist,
         }
     }
 
     fn handle_keystrokes(&mut self, key: KeyEvent) {
         match key.code {
+            KeyCode::Char('p') => {
+                let database = self.db.clone();
+                let tx_send = self.tx_playlist.clone();
+                tokio::spawn(async move {
+                    if let Ok(db) = database.lock() {
+                        if let Some(db) = db.clone() {
+                            println!("send");
+                            tx_send.send(Arc::new(Mutex::new(db)));
+                        }
+                    }
+                });
+            }
             KeyCode::Right => {
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
@@ -411,7 +429,7 @@ impl SeletectPlayListView {
         if let Ok(item) = self.content.lock() {
             if let Some(r) = item.clone() {
                 self.max_len = r.len();
-                if self.selected  >= self.max_len{
+                if self.selected >= self.max_len {
                     self.selected = self.max_len - 1;
                 }
                 let items: Vec<ListItem> = r
