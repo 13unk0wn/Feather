@@ -1,4 +1,5 @@
 #![allow(unused)]
+use std::fs::OpenOptions;
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
 use feather::database::HistoryDB;
@@ -26,11 +27,25 @@ use tokio::{
     time::{Duration, interval},
 };
 
+use log::{info, debug};
+use std::io::Write;
+use simplelog::*;
+
 /// Entry point for the async runtime.
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
    
+      // Set up the logger to write to a file
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("app.log")
+        .unwrap();
+
+// Initialize the logger
+    simplelog::WriteLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default(), log_file).unwrap();
+
     let terminal = ratatui::init();
     let _app = App::new().render(terminal).await;
     ratatui::restore();

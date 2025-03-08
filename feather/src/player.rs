@@ -125,14 +125,17 @@ impl Player {
     pub fn duration(&self) -> String {
         self.player
             .get_property("duration")
-            .unwrap_or(0.0)
+            .unwrap_or(0)
             .to_string()
     }
 
     /// Returns whether a media file is currently playing.
     pub fn is_playing(&self) -> Result<bool, MpvError> {
-        let pause: bool = self.player.get_property("pause")?;
-        Ok(!pause)
+        if self.player.command("seek", &["0", "relative"]).is_err() {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
     }
 }
 

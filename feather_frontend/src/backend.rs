@@ -6,6 +6,7 @@ use feather::{
     player::{MpvError, Player},
     yt::YoutubeClient,
 };
+use log::debug;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -67,7 +68,6 @@ impl Backend {
 
     /// Plays a playlist starting at the given index.
     pub async fn play_playlist(&self, song_db: SongDatabase, index: usize) {
-
         // Step 1: Update the playlist
         {
             let mut playlist = self.playlist.lock().expect("Failed to lock playlist");
@@ -87,18 +87,25 @@ impl Backend {
         // Step 3: Play the song and update index
         if let Some(song) = song_to_play {
             self.play_music(song, true).await;
-            let mut i = self.current_index_playlist.lock().expect("Failed to lock index");
+            let mut i = self
+                .current_index_playlist
+                .lock()
+                .expect("Failed to lock index");
             *i = index;
         }
     }
 
     /// Advances to the next song in the playlist.
-    async fn next_song_playlist(&self) {
+    pub async fn next_song_playlist(&self) {
+        println!("Recieved request");
         let (song_to_play, new_index) = {
             let playlist = self.playlist.lock().expect("Failed to lock playlist");
             if let Some(playlist) = playlist.as_ref() {
                 let len = playlist.db.len();
-                let mut current_index = self.current_index_playlist.lock().expect("Failed to lock index");
+                let mut current_index = self
+                    .current_index_playlist
+                    .lock()
+                    .expect("Failed to lock index");
                 *current_index += 1;
                 *current_index %= len;
                 let song = playlist.get_song_by_index(*current_index).ok();
@@ -118,7 +125,10 @@ impl Backend {
         let (song_to_play, new_index) = {
             let playlist = self.playlist.lock().expect("Failed to lock playlist");
             if let Some(playlist) = playlist.as_ref() {
-                let mut current_index = self.current_index_playlist.lock().expect("Failed to lock index");
+                let mut current_index = self
+                    .current_index_playlist
+                    .lock()
+                    .expect("Failed to lock index");
                 if *current_index > 0 {
                     *current_index -= 1;
                 }
@@ -148,10 +158,13 @@ impl Backend {
     pub async fn play_music(&self, song: Song, playlist_song: bool) -> Result<(), BackendError> {
         let url = format!("https://youtube.com/watch?v={}", song.id);
         self.player.play(&url).map_err(BackendError::Mpv)?;
-        
+
         // Update current song
         {
-            let mut current_song = self.song.lock().map_err(|e| BackendError::MutexPoisoned(e.to_string()))?;
+            let mut current_song = self
+                .song
+                .lock()
+                .map_err(|e| BackendError::MutexPoisoned(e.to_string()))?;
             *current_song = Some(song.clone());
         }
 
@@ -159,10 +172,11 @@ impl Backend {
         self.history
             .add_entry(&HistoryEntry::from(song))
             .map_err(|e| BackendError::HistoryError(e.to_string()))?;
-        
-        self.loop_player(playlist_song)?;
+
+        self.loop_player(!playlist_song)?;
         self.tx.send(playlist_song).await;
-        
+        debug!("Send is_playlist {playlist_song}");
+
         Ok(())
     }
 }

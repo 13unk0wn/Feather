@@ -322,7 +322,6 @@ impl SeletectPlayListView {
                 
                 if let Some(db_inner) = db_inner {
                     backend.play_playlist(db_inner, 0).await;
-                    println!("-------------------Send------------------");
                 }
             });
         }
