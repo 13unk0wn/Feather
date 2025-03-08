@@ -129,13 +129,9 @@ impl Player {
             .to_string()
     }
 
-    /// Returns whether a media file is currently playing.
     pub fn is_playing(&self) -> Result<bool, MpvError> {
-        if self.player.command("seek", &["0", "relative"]).is_err() {
-            Ok(false)
-        } else {
-            Ok(true)
-        }
+        let time_pos: f64 = self.player.get_property("time-pos")?;
+        Ok(time_pos > 0.0)
     }
 }
 

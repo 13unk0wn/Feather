@@ -325,6 +325,24 @@ impl SeletectPlayListView {
                 }
             });
         }
+        KeyCode::Enter => {
+            let db = self.db.clone();
+            let backend = self.backend.clone();
+            let select= self.selected;
+            tokio::spawn(async move {
+                // Extract the SongDatabase before awaiting
+                let db_inner = {
+                    let db_guard = db.lock().expect("Failed to lock db");
+                    db_guard.clone() // Clone the Option<SongDatabase>
+                };
+                
+                if let Some(db_inner) = db_inner {
+                    backend.play_playlist(db_inner, select).await;
+                }
+            });
+
+
+        }
         KeyCode::Right => {
             if let Ok(db) = self.db.lock() {
                 if let Some(db) = db.clone() {

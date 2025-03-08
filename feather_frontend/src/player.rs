@@ -51,9 +51,7 @@ impl SongPlayer {
             is_playlist: Arc::new(Mutex::new(false)),
         };
         player.observe_time(); // Start observing playback time
-        println!("Song end running");
         player.observe_song_end(); // Start observing song end for playlists
-        println!("Song not end running");
         player
     }
 
@@ -106,18 +104,17 @@ impl SongPlayer {
                     } else if was_playing && !is_playing {
                         idle_count += 1;
                         if idle_count >= MAX_IDLE_COUNT {
-                            // let should_play_next = if let Ok(state) = songstate.lock() {
-                            //     *state == SongState::Playing || *state == SongState::Idle
-                            // } else {
-                            //     false
-                            // };
+                            let should_play_next = if let Ok(state) = songstate.lock() {
+                                *state == SongState::Playing || *state == SongState::Idle
+                            } else {
+                                false
+                            };
 
-                            // if should_play_next {
-                            info!("Song ended (detected by idle state), playing next song");
+                            if should_play_next {
                             backend.next_song_playlist().await;
                             was_playing = false; // Reset after playing next song
                             idle_count = 0;
-                            // }
+                            }
                         }
                     }
                 }
@@ -138,10 +135,10 @@ impl SongPlayer {
         };
 
         task::spawn(async move {
-            const MAX_IDLE_COUNT: i32 = 5;
+            const MAX_IDLE_COUNT: i32 = 10;
             let mut idle_count = 0;
 
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
 
             loop {
                 let is_playing = match backend.player.is_playing() {
@@ -196,6 +193,28 @@ impl SongPlayer {
         if let Ok(state) = self.songstate.lock() {
             if *state == SongState::Playing {
                 match key.code {
+                    KeyCode::Char('n') => {
+                        if let Ok(is_playlist) = self.is_playlist.lock(){
+                             if *is_playlist{
+                                drop(is_playlist);
+                                let backend = self.backend.clone();
+                                tokio::spawn(async move{
+                                    backend.next_song_playlist().await;
+                                });
+                             }
+                        }
+                    }
+                    KeyCode::Char('p') => {
+                        if let Ok(is_playlist) = self.is_playlist.lock(){
+                             if *is_playlist{
+                                drop(is_playlist);
+                                let backend = self.backend.clone();
+                                tokio::spawn(async move{
+                                    backend.prev_song_playlist().await;
+                                });
+                             }
+                        }
+                    }
                     KeyCode::Char(' ') | KeyCode::Char(';') => {
                         if let Ok(_) = self.backend.player.play_pause() {};
                     }

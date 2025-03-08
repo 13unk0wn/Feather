@@ -97,7 +97,7 @@ impl Backend {
 
     /// Advances to the next song in the playlist.
     pub async fn next_song_playlist(&self) {
-        println!("Recieved request");
+        // println!("Recieved request");
         let (song_to_play, new_index) = {
             let playlist = self.playlist.lock().expect("Failed to lock playlist");
             if let Some(playlist) = playlist.as_ref() {
@@ -121,7 +121,7 @@ impl Backend {
     }
 
     /// Goes back to the previous song in the playlist.
-    async fn prev_song_playlist(&self) {
+    pub async fn prev_song_playlist(&self) {
         let (song_to_play, new_index) = {
             let playlist = self.playlist.lock().expect("Failed to lock playlist");
             if let Some(playlist) = playlist.as_ref() {
@@ -175,7 +175,6 @@ impl Backend {
 
         self.loop_player(!playlist_song)?;
         self.tx.send(playlist_song).await;
-        debug!("Send is_playlist {playlist_song}");
 
         Ok(())
     }
