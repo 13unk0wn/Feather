@@ -1,4 +1,14 @@
 #![allow(unused)]
+use ratatui::prelude::Alignment;
+use ratatui::prelude::Direction;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
@@ -16,7 +26,7 @@ use crate::playlist_search;
 use crate::playlist_search::PlayListSearch;
 use crate::search::Search;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum SearchMainState {
     SongSearch,
     PlayListSearch,
@@ -54,12 +64,15 @@ impl<'a> SearchMain<'a> {
     }
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let chunks = Layout::default()
-            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .constraints([Constraint::Length(3), Constraint::Min(0)])
             .split(area);
 
-        let topbar = Layout::default()
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(chunks[0]);
+        let s = format!("Current Search Mode : {:?}", self.state);
+        let block = Paragraph::new(s)
+            .alignment(Alignment::Left)
+            .block(Block::default().borders(Borders::ALL));
+
+        block.render(chunks[0], buf);
 
         match self.state {
             SearchMainState::SongSearch => self.search.render(chunks[1], buf),

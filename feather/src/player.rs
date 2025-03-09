@@ -80,6 +80,21 @@ impl Player {
         Ok(())
     }
 
+    fn current_volume(&self) -> Result<i64, MpvError> {
+        Ok(self.player.get_property("volume")?)
+    }
+
+    pub fn low_volume(&self) -> Result<(), MpvError> {
+        self.player
+            .set_property("volume", self.current_volume()?.saturating_sub(5))?;
+        Ok(())
+    }
+    pub fn high_volume(&self) -> Result<(), MpvError> {
+        self.player
+            .set_property("volume", self.current_volume()?.saturating_add(5).min(100))?;
+        Ok(())
+    }
+
     pub fn remove_loop(&self) -> Result<(), MpvError> {
         self.player.set_property("loop", "no")?;
         Ok(())

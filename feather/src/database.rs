@@ -1,8 +1,12 @@
 #![allow(unused)]
 use crate::yt::YoutubeClient;
+use crate::PlaylistName;
 use log::debug;
 use log::log;
 use std::fs;
+use std::fs::File;
+use std::path::Path;
+use std::time::SystemTimeError;
 // This file manages the history database and contains all necessary functions related to history management
 use crate::{ArtistName, SongId, SongName};
 use serde::{Deserialize, Serialize};
@@ -12,6 +16,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
+const MIGRATION_KEY: &str = "DONE";
+
 /// Represents a history entry for a song that has been played.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HistoryEntry {
@@ -19,6 +25,7 @@ pub struct HistoryEntry {
     pub song_id: SongId,              // Unique identifier for the song
     pub artist_name: Vec<ArtistName>, // List of artists associated with the song
     time_stamp: u64,                  // Timestamp when the song was played
+    pub play_count: u64,
 }
 
 impl HistoryEntry {
@@ -27,13 +34,14 @@ impl HistoryEntry {
         song_name: SongName,
         song_id: SongId,
         artist_name: Vec<ArtistName>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, HistoryError> {
         let time_stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         Ok(Self {
             song_name,
             song_id,
             artist_name,
             time_stamp,
+            play_count: 1,
         })
     }
 }
@@ -52,10 +60,12 @@ pub enum HistoryError {
     SerializationError(#[from] bincode::Error), // Errors during serialization/deserialization
     #[error("Basic error: {0}")]
     Error(Box<dyn std::error::Error>), // Generic error wrapper
+    #[error("Time Erorr : {0}")]
+    Erorr(#[from] SystemTimeError),
 }
 
 impl HistoryDB {
-    pub fn new() -> Result<Self, sled::Error> {
+    pub fn new() -> Result<Self, HistoryError> {
         let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
         path.push("Feather/history_db");
 
@@ -65,15 +75,67 @@ impl HistoryDB {
             .use_compression(true)
             .open()?;
 
-        Ok(HistoryDB { db })
+        let db = HistoryDB { db };
+        db.migrate_history()?;
+        Ok(db)
+    }
+    pub fn backup_history(&self) -> Result<(), HistoryError> {
+        let backup_path = Path::new("history_backup.bin");
+        let mut backup_file = File::create(backup_path).unwrap();
+
+        // Collect all history entries
+        let mut history_entries = Vec::new();
+        for item in self.db.iter() {
+            let (_, value) = item?;
+            if let Ok(entry) = bincode::deserialize::<HistoryEntry>(&value) {
+                history_entries.push(entry);
+            }
+        }
+
+        // Serialize and write to the backup file
+        bincode::serialize_into(&mut backup_file, &history_entries)?;
+
+        Ok(())
+    }
+
+    pub fn migrate_history(&self) -> Result<(), HistoryError> {
+        // backup history
+        if self.db.get(MIGRATION_KEY)?.is_some() {
+            return Ok(());
+        }
+        self.backup_history()?;
+        for item in self.db.iter() {
+            let (key, value) = item?;
+            if let Ok(mut entry) = bincode::deserialize::<HistoryEntry>(&value) {
+                if entry.play_count == 0 {
+                    entry.play_count = 1; // Default to 1 if missing
+                    let new_value = bincode::serialize(&entry)?;
+                    self.db.insert(key, new_value)?; // Update database
+                }
+            }
+        }
+        self.db.insert(MIGRATION_KEY, b"true")?;
+        Ok(())
     }
 
     /// Adds a new entry to the history database.
     /// Limits the total stored entries to 50.
     pub fn add_entry(&self, entry: &HistoryEntry) -> Result<(), HistoryError> {
         let key = entry.song_id.as_bytes();
-        let value = bincode::serialize(entry)?;
-        self.db.insert(key, value)?;
+
+        if let Some(value) = self.db.get(key)? {
+            let mut existing_entry: HistoryEntry = bincode::deserialize(&value)?;
+            existing_entry.play_count += 1; // Increase play count
+            existing_entry.time_stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(); // Update timestamp
+
+            let new_value = bincode::serialize(&existing_entry)?;
+            self.db.insert(key, new_value)?;
+        } else {
+            // If it's a new song, add it normally
+            let new_value = bincode::serialize(entry)?;
+            self.db.insert(key, new_value)?;
+        }
+
         self.limit_history_size(50)?;
         Ok(())
     }
@@ -127,7 +189,7 @@ impl HistoryDB {
 
 use std::str;
 
-pub const PAGE_SIZE: usize = 10;
+pub const PAGE_SIZE: usize = 20;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub struct Song {
@@ -276,153 +338,117 @@ impl SongDatabase {
     }
 }
 
-// #[tokio::test]
-// async fn test_playlist() {
-//     let yt = YoutubeClient::new(None);
-//     let mut tempdb = SongDatabase::new().unwrap();
-//     let yt_playlist = yt.fetch_playlist("lofi music").await.unwrap();
-//     let playlist = yt_playlist[1].clone();
-//     let fetch_songs = yt.fetch_playlist_songs(playlist.0.1).await.unwrap();
-//     let len = fetch_songs.len();
-//     for i in fetch_songs {
-//         let id = i.0.1;
-//         let title = i.0.0;
-//         let artist_name = i.1;
-//         tempdb.add_song(title, id, artist_name).unwrap();
-//     }
-//     let songs = tempdb.next_page(0).unwrap();
-//     println!("0");
-//     for i in songs {
-//         println!("{:?}", i);
-//     }
-//     println!("10");
-//     let songs = tempdb.next_page(10).unwrap();
-//     for i in songs {
-//         println!("{:?}", i);
-//     }
-//     println!("0");
-//     let songs = tempdb.next_page(0).unwrap();
-//     for i in songs {
-//         println!("{:?}", i);
-//     }
-// }
-
 // Unchanged UserPlaylist and PlaylistManager sections...
-// #[derive(Serialize, Deserialize, Debug, Clone)]
-// struct UserPlaylist {
-//     playlist_name: PlaylistName,
-//     songs: Vec<Song>,
-// }
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UserPlaylist {
+    playlist_name: PlaylistName,
+    songs: Vec<Song>,
+}
 
-// #[derive(Error, Debug)]
-// pub enum PlaylistManagerError {
-//     #[error("Database error: {0}")]
-//     DbError(#[from] sled::Error),
-//     #[error("Serialization error: {0}")]
-//     SerializationError(#[from] bincode::Error),
-//     #[error("Playlist '{0}' not found")]
-//     PlaylistNotFound(String),
-//     #[error("Song '{0}' not found in playlist '{1}'")]
-//     SongNotFound(String, String),
-//     #[error("Duplicate playlist name: '{0}'")]
-//     DuplicatePlaylist(String),
-//     #[error("Failed to add song '{0}' to playlist '{1}'")]
-//     AddSongError(String, String),
-//     #[error("Failed to remove song '{0}' from playlist '{1}'")]
-//     RemoveSongError(String, String),
-//     #[error("Unknown error: {0}")]
-//     Other(String),
-// }
+#[derive(Error, Debug)]
+pub enum PlaylistManagerError {
+    #[error("Database error: {0}")]
+    DbError(#[from] sled::Error),
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] bincode::Error),
+    #[error("Playlist '{0}' not found")]
+    PlaylistNotFound(String),
+    #[error("Song '{0}' not found in playlist '{1}'")]
+    SongNotFound(String, String),
+    #[error("Duplicate playlist name: '{0}'")]
+    DuplicatePlaylist(String),
+    #[error("Failed to add song '{0}' to playlist '{1}'")]
+    AddSongError(String, String),
+    #[error("Failed to remove song '{0}' from playlist '{1}'")]
+    RemoveSongError(String, String),
+    #[error("Unknown error: {0}")]
+    Other(String),
+}
 
-// #[derive(Serialize, Deserialize, Debug, Clone)]
-// struct Song {
-//     song_name: SongName,
-//     song_id: SongId,
-//     artist: Vec<ArtistName>,
-// }
+pub struct PlaylistManager {
+    db: sled::Db,
+}
 
-// struct PlaylistManager {
-//     db: sled::Db,
-// }
+impl PlaylistManager {
+    pub fn new() -> Result<Self, PlaylistManagerError> {
+        let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        path.push("Feather/UserPlaylist_db");
+        let db = sled::open(path)?;
+        Ok(Self { db })
+    }
+    pub fn create_playlist(&self, name: &str) -> Result<(), PlaylistManagerError> {
+        if self.db.get(name)?.is_some() {
+            return Err(PlaylistManagerError::DuplicatePlaylist(name.to_string()));
+        }
+        let playlist = UserPlaylist {
+            playlist_name: name.to_string(),
+            songs: Vec::new(),
+        };
+        let value = bincode::serialize(&playlist)?;
+        self.db.insert(name, value)?;
+        self.db.flush()?;
+        Ok(())
+    }
+    pub fn add_song_to_playlist(
+        &self,
+        playlist_name: &str,
+        song: Song,
+    ) -> Result<(), PlaylistManagerError> {
+        let raw_data = self
+            .db
+            .get(playlist_name)?
+            .ok_or_else(|| PlaylistManagerError::Other("Error: In Opening Playlist".to_string()))?
+            .to_vec();
 
-// impl PlaylistManager {
-//     pub fn new(path: &str) -> Result<Self, PlaylistManagerError> {
-//         let db = sled::open(path)?;
-//         Ok(Self { db })
-//     }
-//     fn create_playlist(&self, name: &str) -> Result<(), PlaylistManagerError> {
-//         if self.db.get(name)?.is_some() {
-//             return Err(PlaylistManagerError::DuplicatePlaylist(name.to_string()));
-//         }
-//         let playlist = UserPlaylist {
-//             playlist_name: name.to_string(),
-//             songs: Vec::new(),
-//         };
-//         let value = bincode::serialize(&playlist)?;
-//         self.db.insert(name, value)?;
-//         self.db.flush()?;
-//         Ok(())
-//     }
-//     fn add_song_to_playlist(
-//         &self,
-//         playlist_name: &str,
-//         song: Song,
-//     ) -> Result<(), PlaylistManagerError> {
-//         let raw_data = self
-//             .db
-//             .get(playlist_name)?
-//             .ok_or_else(|| PlaylistManagerError::Other("Error: In Opening Playlist".to_string()))?
-//             .to_vec();
+        let mut playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
 
-//         let mut playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
+        playlist.songs.retain(|s| s.id != song.id);
+        playlist.songs.push(song);
 
-//         playlist.songs.retain(|s| s.song_id != song.song_id);
-//         playlist.songs.push(song);
+        let serialized_data = bincode::serialize(&playlist)?;
+        self.db.insert(playlist_name, serialized_data)?;
+        self.db.flush()?;
 
-//         let serialized_data = bincode::serialize(&playlist)?;
-//         self.db.insert(playlist_name, serialized_data)?;
-//         self.db.flush()?;
+        Ok(())
+    }
+    pub fn remove_song_from_playlist(
+        &self,
+        playlist_name: &str,
+        song_id: &str,
+    ) -> Result<(), PlaylistManagerError> {
+        let raw_data = self
+            .db
+            .get(playlist_name)?
+            .ok_or_else(|| PlaylistManagerError::Other("Error: In Opening Playlist".to_string()))?
+            .to_vec();
 
-//         Ok(())
-//     }
-//     fn remove_song_from_playlist(
-//         &self,
-//         playlist_name: &str,
-//         song_id: &str,
-//     ) -> Result<(), PlaylistManagerError> {
-//         let raw_data = self
-//             .db
-//             .get(playlist_name)?
-//             .ok_or_else(|| PlaylistManagerError::Other("Error: In Opening Playlist".to_string()))?
-//             .to_vec();
+        let mut playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
 
-//         let mut playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
+        playlist.songs.retain(|s| s.id != song_id);
+        let serialized_data = bincode::serialize(&playlist)?;
+        self.db.insert(playlist_name, serialized_data)?;
+        self.db.flush()?;
 
-//         playlist.songs.retain(|s| s.song_id != song_id);
-//         let serialized_data = bincode::serialize(&playlist)?;
-//         self.db.insert(playlist_name, serialized_data)?;
-//         self.db.flush()?;
+        Ok(())
+    }
 
-//         Ok(())
-//     }
-
-//     fn get_playlist(&self, playlist_name: &str) -> Result<UserPlaylist, PlaylistManagerError> {
-//         let data = self
-//             .db
-//             .get(playlist_name)?
-//             .ok_or_else(|| PlaylistManagerError::PlaylistNotFound(playlist_name.to_string()))?
-//             .to_vec();
-//         let playlist: UserPlaylist = bincode::deserialize(&data)?;
-//         Ok(playlist)
-//     }
-//     fn delete_playlist(&self, playlist_name: &str) -> Result<(), PlaylistManagerError> {
-//         self.db
-//             .remove(&playlist_name)?
-//             .ok_or_else(|| PlaylistManagerError::PlaylistNotFound(playlist_name.to_string()));
-//         self.db.flush()?;
-//         Ok(())
-//     }
-// }
+    pub fn get_playlist(&self, playlist_name: &str) -> Result<UserPlaylist, PlaylistManagerError> {
+        let data = self
+            .db
+            .get(playlist_name)?
+            .ok_or_else(|| PlaylistManagerError::PlaylistNotFound(playlist_name.to_string()))?
+            .to_vec();
+        let playlist: UserPlaylist = bincode::deserialize(&data)?;
+        Ok(playlist)
+    }
+    pub fn delete_playlist(&self, playlist_name: &str) -> Result<(), PlaylistManagerError> {
+        self.db
+            .remove(&playlist_name)?
+            .ok_or_else(|| PlaylistManagerError::PlaylistNotFound(playlist_name.to_string()));
+        self.db.flush()?;
+        Ok(())
+    }
+}
 
 // // Tests unchanged...
 // #[cfg(test)]

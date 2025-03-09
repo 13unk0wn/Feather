@@ -1,5 +1,7 @@
+#![allow(non_snake_case)]
 #![allow(unused)]
-use feather::database::SongError;
+use feather::database::PlaylistManager;
+use feather::database::{PlaylistManagerError, SongError};
 use feather::{
     ArtistName, SongId, SongName,
     database::{HistoryDB, HistoryEntry, Song, SongDatabase},
@@ -24,6 +26,7 @@ pub struct Backend {
     tx: mpsc::Sender<bool>,
     pub playlist: Arc<Mutex<Option<SongDatabase>>>,
     current_index_playlist: Arc<Mutex<usize>>,
+    pub PlayListManager :  Arc<PlaylistManager>,
 }
 
 /// Defines possible errors that can occur in the `Backend`.
@@ -46,6 +49,9 @@ pub enum BackendError {
 
     #[error("Playlist error : {0}")]
     PlaylistError(#[from] SongError),
+
+    #[error("UserPlayListError : {0}")]
+    UserPlayListError(#[from] PlaylistManagerError)
 }
 
 impl Backend {
@@ -63,6 +69,7 @@ impl Backend {
             history,
             song: Mutex::new(None),
             tx,
+            PlayListManager  : Arc::new(PlaylistManager::new()?),
         })
     }
 

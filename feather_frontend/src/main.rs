@@ -1,4 +1,5 @@
 #![allow(unused)]
+use feather_frontend::home::Home;
 use std::fs::OpenOptions;
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
@@ -69,10 +70,10 @@ enum State {
 struct App<'a> {
     state: State,
     search: SearchMain<'a>,
+    home  : Home,
     history: History,
     help: Help,
     // user_playlist: UserPlaylist,
-    // current_playling_playlist: CurrentPlayingPlaylist,
     top_bar: TopBar,
     player: SongPlayer,
     // backend: Arc<Backend>,
@@ -97,6 +98,7 @@ impl App<'_> {
             search: SearchMain::new(search, playlist_search),
             history: History::new(history, backend.clone()),
             help: Help::new(),
+            home  : Home::new(),
             // user_playlist: UserPlaylist {},
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),

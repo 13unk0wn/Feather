@@ -215,6 +215,12 @@ impl SongPlayer {
                              }
                         }
                     }
+                    KeyCode::Up =>  {
+                        self.backend.player.high_volume().is_ok();
+                    }
+                    KeyCode::Down => {
+                        self.backend.player.low_volume().is_ok();
+                    }
                     KeyCode::Char(' ') | KeyCode::Char(';') => {
                         if let Ok(_) = self.backend.player.play_pause() {};
                     }
