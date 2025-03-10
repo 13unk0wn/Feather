@@ -411,16 +411,6 @@ impl PlaylistManager {
 
         Ok(())
     }
-    pub fn list_playlists(&self) -> Result<Vec<String>, PlaylistManagerError> {
-        self.db
-            .iter()
-            .keys()
-            .map(|key| {
-                key.map(|k| String::from_utf8_lossy(&k).into_owned())
-                    .map_err(PlaylistManagerError::from)
-            })
-            .collect()
-    }
     pub fn remove_song_from_playlist(
         &self,
         playlist_name: &str,
