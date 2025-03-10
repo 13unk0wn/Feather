@@ -1,5 +1,6 @@
 #![allow(unused)]
 use feather_frontend::home::Home;
+use feather_frontend::userplaylist::UserPlayList;
 use std::fs::OpenOptions;
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
@@ -61,7 +62,7 @@ enum State {
     Global,
     Search,
     History,
-    // UserPlaylist,
+    UserPlaylist,
     // CurrentPlayingPlaylist,
     SongPlayer,
 }
@@ -73,13 +74,13 @@ struct App<'a> {
     home  : Home,
     history: History,
     help: Help,
-    // user_playlist: UserPlaylist,
     top_bar: TopBar,
     player: SongPlayer,
     // backend: Arc<Backend>,
     help_mode: bool,
     exit: bool,
     prev_state: Option<State>,
+    userplaylist : UserPlayList<'a>,
 }
 
 impl App<'_> {
@@ -96,10 +97,10 @@ impl App<'_> {
         App {
             state: State::Global,
             search: SearchMain::new(search, playlist_search),
+            userplaylist : UserPlayList::new(backend.clone()),
             history: History::new(history, backend.clone()),
             help: Help::new(),
             home  : Home::new(),
-            // user_playlist: UserPlaylist {},
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
             player: SongPlayer::new(backend.clone(), rx,rx_playlist),
@@ -117,6 +118,7 @@ impl App<'_> {
                     if let Event::Key(next_key) = next_key {
                         match next_key.code {
                             KeyCode::Char('s') => self.state = State::Search,
+                            KeyCode::Char('u') => self.state = State::UserPlaylist,
                             KeyCode::Char('h') => self.state = State::History,
                             KeyCode::Char('p') => {
                                 self.prev_state = Some(self.state);
@@ -157,6 +159,9 @@ impl App<'_> {
             State::SongPlayer => match key.code {
                 _ => self.player.handle_keystrokes(key),
             },
+            State::UserPlaylist => match key.code {
+                _ => self.userplaylist.handle_keystrokes(key),
+            }
             _ => (),
         }
     }
@@ -191,6 +196,7 @@ impl App<'_> {
                         match self.state {
                             State::Search => self.search.render(layout[1], frame.buffer_mut()),
                             State::History => self.history.render(layout[1], frame.buffer_mut()),
+                            State::UserPlaylist => self.userplaylist.render(layout[1], frame.buffer_mut()),
                             State::SongPlayer => {
                                 if let Some(prev) = self.prev_state {
                                     match prev {
@@ -235,7 +241,7 @@ impl TopBar {
         Self
     }
     fn render(&mut self, area: Rect, buf: &mut Buffer, state: &State) {
-        let titles = ["Home", "Search", "History"];
+        let titles = ["Home", "Search", "History","UserPlaylist"];
 
         // Define colors
         let normal_style = Style::default().fg(Color::White);
@@ -248,6 +254,7 @@ impl TopBar {
                 (0, State::Home) => selected_style,
                 (1, State::Search) => selected_style,
                 (2, State::History) => selected_style,
+                (3,State::UserPlaylist) => selected_style,
                 _ => normal_style,
             };
 
@@ -269,9 +276,3 @@ impl TopBar {
     }
 }
 
-#[allow(unused)]
-/// Placeholder struct for user playlists.
-struct UserPlaylist {}
-#[allow(unused)]
-/// Placeholder struct for currently playing playlist.
-struct CurrentPlayingPlaylist {}
