@@ -25,6 +25,7 @@ use ratatui::widgets::Widget;
 use std::collections::linked_list;
 use std::sync::Arc;
 use std::sync::Mutex;
+use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 
 use crate::backend::Backend;
@@ -37,45 +38,44 @@ enum State {
 
 pub struct UserPlayList<'a> {
     backend: Arc<Backend>,
-    state: Arc<Mutex<State>>,
+    state: State,
     new_playlist: NewPlayList<'a>,
     list_playlist: ListPlaylist,
     popup: Arc<Mutex<bool>>,
+    viewplaylist: ViewPlayList,
+    rx: mpsc::Receiver<bool>,
 }
 
 impl<'a> UserPlayList<'a> {
     pub fn new(backend: Arc<Backend>) -> Self {
+        let (tx, rx) = mpsc::channel(1);
+        let (tx_playlist, rx_playlist) = mpsc::channel(32);
         let popup = Arc::new(Mutex::new(false));
-        let state = Arc::new(Mutex::new(State::AllPlayList));
+        let state = State::AllPlayList;
         Self {
             backend: backend.clone(),
-            list_playlist: ListPlaylist::new(backend.clone(), state.clone()),
+            list_playlist: ListPlaylist::new(backend.clone(), tx_playlist),
+            viewplaylist: ViewPlayList::new(backend.clone(), rx_playlist),
             state,
-            new_playlist: NewPlayList::new(backend, popup.clone()),
+            new_playlist: NewPlayList::new(backend, popup.clone(), tx),
             popup: popup,
+            rx,
         }
     }
 
     pub fn handle_keystrokes(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('`') => {
-                if let Ok(mut state) = self.state.lock() {
-                    *state = State::CreatePlayList;
-                }
+                self.state = State::CreatePlayList;
                 if let Ok(mut popup) = self.popup.lock() {
-                    debug!("{:?}", "popup_area");
                     *popup = true;
                 }
             }
-            _ => {
-                if let Ok(state) = self.state.lock() {
-                    match *state {
-                        State::CreatePlayList => self.new_playlist.handle_keystrokes(key),
-                        State::AllPlayList => self.list_playlist.handle_keystrokes(key),
-                        _ => (),
-                    }
-                }
-            }
+            _ => match self.state {
+                State::CreatePlayList => self.new_playlist.handle_keystrokes(key),
+                State::AllPlayList => self.list_playlist.handle_keystrokes(key),
+                _ => (),
+            },
         }
     }
 
@@ -88,10 +88,13 @@ impl<'a> UserPlayList<'a> {
         let viewplaylist_area = chunks[1];
         self.list_playlist.render(userplaylist_list_area, buf);
 
+        if let Ok(value) = self.rx.try_recv() {
+            self.state = State::AllPlayList;
+        }
+
         if let Ok(value) = self.popup.try_lock() {
             if *value {
                 drop(value);
-                debug!("{:?}", "Should appear");
                 let popup_area = Rect {
                     x: area.x + area.width / 3,  // 33% margin on both sides
                     y: area.y + area.height / 2, // Center it vertically
@@ -110,15 +113,17 @@ struct NewPlayList<'a> {
     playlistname: PlaylistName,
     popup: Arc<Mutex<bool>>,
     backend: Arc<Backend>,
+    tx: mpsc::Sender<bool>,
 }
 
 impl<'a> NewPlayList<'a> {
-    pub fn new(backend: Arc<Backend>, popup: Arc<Mutex<bool>>) -> Self {
+    pub fn new(backend: Arc<Backend>, popup: Arc<Mutex<bool>>, tx: mpsc::Sender<bool>) -> Self {
         Self {
             textarea: TextArea::default(),
             playlistname: String::new(),
             backend,
             popup: popup,
+            tx,
         }
     }
 
@@ -128,6 +133,10 @@ impl<'a> NewPlayList<'a> {
                 if let Ok(mut popup) = self.popup.lock() {
                     *popup = false;
                 }
+                let tx = self.tx.clone();
+                tokio::spawn(async move {
+                    tx.send(true).await;
+                });
             }
             KeyCode::Enter => {
                 let lines = self.textarea.lines()[0].trim();
@@ -142,6 +151,12 @@ impl<'a> NewPlayList<'a> {
                         if let Ok(mut popup) = self.popup.lock() {
                             *popup = false;
                         }
+                        let tx = self.tx.clone();
+                        self.textarea.select_all();
+                        self.textarea.cut();
+                        tokio::spawn(async move {
+                            tx.send(true).await;
+                        });
                     }
                 }
             }
@@ -170,20 +185,32 @@ struct ListPlaylist {
     selected: usize,
     max_len: usize,
     vertical_scroll_state: ScrollbarState,
+    selected_playlist_name: Option<String>,
+    tx: mpsc::Sender<String>,
 }
 
 impl ListPlaylist {
-    fn new(backend: Arc<Backend>, state: Arc<Mutex<State>>) -> Self {
+    fn new(backend: Arc<Backend>, tx: mpsc::Sender<String>) -> Self {
         ListPlaylist {
             backend,
             selected: 0,
             max_len: 0,
             vertical_scroll_state: ScrollbarState::default(),
+            selected_playlist_name: None,
+            tx,
         }
     }
 
     pub fn handle_keystrokes(&mut self, key: KeyEvent) {
         match key.code {
+            KeyCode::Enter => {
+                if let Some(playlist_name) = self.selected_playlist_name.clone() {
+                    let tx = self.tx.clone();
+                    tokio::spawn(async move {
+                        tx.send(playlist_name).await;
+                    });
+                }
+            }
             KeyCode::Char('j') | KeyCode::Down => {
                 // Move selection down
                 self.select_next();
@@ -225,6 +252,7 @@ impl ListPlaylist {
                     // Format each item for display
                     let is_selected = i == self.selected;
                     let style = if is_selected {
+                        self.selected_playlist_name = Some(item.clone());
                         // Highlight selected item
                         Style::default().fg(Color::Yellow).bg(Color::Blue)
                     } else {
@@ -250,4 +278,17 @@ impl ListPlaylist {
         let outer_block = Block::default().borders(Borders::ALL);
         outer_block.render(area, buf);
     }
+}
+
+struct ViewPlayList {
+    backend: Arc<Backend>,
+    rx: mpsc::Receiver<String>,
+}
+
+impl ViewPlayList {
+    fn new(backend: Arc<Backend>, rx: mpsc::Receiver<String>) -> Self {
+        Self { backend, rx }
+    }
+
+    fn handle_keystrokes(&self) {}
 }

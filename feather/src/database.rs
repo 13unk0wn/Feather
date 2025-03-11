@@ -342,7 +342,18 @@ impl SongDatabase {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserPlaylist {
     playlist_name: PlaylistName,
-    songs: Vec<Song>,
+    max_index: usize,
+    songs: Vec<(usize, Song)>,
+}
+
+impl UserPlaylist {
+    fn new(playlist_name: PlaylistName) -> Self {
+        Self {
+            playlist_name,
+            max_index: 0,
+            songs: Vec::new(),
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -380,10 +391,7 @@ impl PlaylistManager {
         if self.db.get(name)?.is_some() {
             return Err(PlaylistManagerError::DuplicatePlaylist(name.to_string()));
         }
-        let playlist = UserPlaylist {
-            playlist_name: name.to_string(),
-            songs: Vec::new(),
-        };
+        let playlist = UserPlaylist::new(name.to_string());
         let value = bincode::serialize(&playlist)?;
         self.db.insert(name, value)?;
         self.db.flush()?;
@@ -402,9 +410,10 @@ impl PlaylistManager {
 
         let mut playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
 
-        playlist.songs.retain(|s| s.id != song.id);
-        playlist.songs.push(song);
+        playlist.songs.retain(|s| s.1.id != song.id);
+        playlist.songs.push((playlist.max_index, song));
 
+        playlist.max_index += 1;
         let serialized_data = bincode::serialize(&playlist)?;
         self.db.insert(playlist_name, serialized_data)?;
         self.db.flush()?;
@@ -434,7 +443,7 @@ impl PlaylistManager {
 
         let mut playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
 
-        playlist.songs.retain(|s| s.id != song_id);
+        playlist.songs.retain(|s| s.1.id != song_id);
         let serialized_data = bincode::serialize(&playlist)?;
         self.db.insert(playlist_name, serialized_data)?;
         self.db.flush()?;
@@ -442,15 +451,31 @@ impl PlaylistManager {
         Ok(())
     }
 
-    pub fn get_playlist(&self, playlist_name: &str) -> Result<UserPlaylist, PlaylistManagerError> {
+    pub fn get_playlist(
+        &self,
+        playlist_name: &str,
+        offset: usize,
+    ) -> Result<Vec<Song>, PlaylistManagerError> {
         let data = self
             .db
             .get(playlist_name)?
             .ok_or_else(|| PlaylistManagerError::PlaylistNotFound(playlist_name.to_string()))?
             .to_vec();
-        let playlist: UserPlaylist = bincode::deserialize(&data)?;
-        Ok(playlist)
+
+        let mut playlist: UserPlaylist = bincode::deserialize(&data)?;
+
+        playlist.songs.sort_by_key(|song| song.0);
+
+        // Use PAGE_SIZE for pagination
+        let songs = playlist
+            .songs
+            .get(offset..offset + PAGE_SIZE)
+            .unwrap_or(&[])
+            .to_vec();
+        let new_songs = songs.into_iter().map(|i| i.1).collect::<Vec<_>>();
+        Ok(new_songs)
     }
+
     pub fn delete_playlist(&self, playlist_name: &str) -> Result<(), PlaylistManagerError> {
         self.db
             .remove(&playlist_name)?
