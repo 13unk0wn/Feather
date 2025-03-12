@@ -1,12 +1,11 @@
 #![allow(unused)]
-use feather_frontend::home::Home;
-use feather_frontend::userplaylist::UserPlayList;
-use std::fs::OpenOptions;
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
 use feather::database::HistoryDB;
+use feather_frontend::home::Home;
 use feather_frontend::playlist_search::PlayListSearch;
 use feather_frontend::search_main::SearchMain;
+use feather_frontend::userplaylist::UserPlayList;
 use feather_frontend::{
     backend::Backend, help::Help, history::History, player::SongPlayer, search::Search,
 };
@@ -23,30 +22,36 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 use std::arch::x86_64::_mm256_castpd256_pd128;
+use std::fs::OpenOptions;
 use std::{env, sync::Arc};
 use tokio::{
     sync::mpsc,
     time::{Duration, interval},
 };
 
-use log::{info, debug};
-use std::io::Write;
+use log::{debug, info};
 use simplelog::*;
+use std::io::Write;
 
 /// Entry point for the async runtime.
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
-   
-      // Set up the logger to write to a file
+
+    // Set up the logger to write to a file
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)
         .open("app.log")
         .unwrap();
 
-// Initialize the logger
-    simplelog::WriteLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default(), log_file).unwrap();
+    // Initialize the logger
+    simplelog::WriteLogger::init(
+        simplelog::LevelFilter::Debug,
+        simplelog::Config::default(),
+        log_file,
+    )
+    .unwrap();
 
     let terminal = ratatui::init();
     let _app = App::new().render(terminal).await;
@@ -55,7 +60,7 @@ async fn main() -> Result<()> {
 }
 
 /// Enum representing different states of the application.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum State {
     Home,
     HelpMode,
@@ -71,7 +76,7 @@ enum State {
 struct App<'a> {
     state: State,
     search: SearchMain<'a>,
-    home  : Home,
+    home: Home,
     history: History,
     help: Help,
     top_bar: TopBar,
@@ -80,7 +85,7 @@ struct App<'a> {
     help_mode: bool,
     exit: bool,
     prev_state: Option<State>,
-    userplaylist : UserPlayList<'a>,
+    userplaylist: UserPlayList<'a>,
 }
 
 impl App<'_> {
@@ -89,21 +94,24 @@ impl App<'_> {
         let history = Arc::new(HistoryDB::new().unwrap());
         let get_cookies = env::var("FEATHER_COOKIES").ok(); // Fetch cookies from environment variables if available.
         let (tx, rx) = mpsc::channel(32);
-        let (tx_playlist,rx_playlist) = mpsc::channel(500);
-        let backend = Arc::new(Backend::new(history.clone(), get_cookies,tx.clone()).unwrap());
+        let (tx_playlist_off, rx_playlist_off) = mpsc::channel(1);
+        let (tx_playlist, rx_playlist) = mpsc::channel(500);
+        let backend = Arc::new(
+            Backend::new(history.clone(), get_cookies, tx.clone(), tx_playlist_off).unwrap(),
+        );
         let search = Search::new(backend.clone());
-        let playlist_search = PlayListSearch::new(backend.clone(),tx_playlist);
+        let playlist_search = PlayListSearch::new(backend.clone(), tx_playlist);
 
         App {
             state: State::Global,
             search: SearchMain::new(search, playlist_search),
-            userplaylist : UserPlayList::new(backend.clone()),
+            userplaylist: UserPlayList::new(backend.clone()),
             history: History::new(history, backend.clone()),
             help: Help::new(),
-            home  : Home::new(),
+            home: Home::new(),
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
-            player: SongPlayer::new(backend.clone(), rx,rx_playlist),
+            player: SongPlayer::new(backend.clone(), rx, rx_playlist, rx_playlist_off),
             // backend,
             help_mode: false,
             exit: false,
@@ -121,7 +129,9 @@ impl App<'_> {
                             KeyCode::Char('u') => self.state = State::UserPlaylist,
                             KeyCode::Char('h') => self.state = State::History,
                             KeyCode::Char('p') => {
-                                self.prev_state = Some(self.state);
+                                if self.state != State::SongPlayer {
+                                    self.prev_state = Some(self.state);
+                                }
                                 self.state = State::SongPlayer;
                             }
                             KeyCode::Char('?') => {
@@ -161,7 +171,7 @@ impl App<'_> {
             },
             State::UserPlaylist => match key.code {
                 _ => self.userplaylist.handle_keystrokes(key),
-            }
+            },
             _ => (),
         }
     }
@@ -196,7 +206,9 @@ impl App<'_> {
                         match self.state {
                             State::Search => self.search.render(layout[1], frame.buffer_mut()),
                             State::History => self.history.render(layout[1], frame.buffer_mut()),
-                            State::UserPlaylist => self.userplaylist.render(layout[1], frame.buffer_mut()),
+                            State::UserPlaylist => {
+                                self.userplaylist.render(layout[1], frame.buffer_mut())
+                            }
                             State::SongPlayer => {
                                 if let Some(prev) = self.prev_state {
                                     match prev {
@@ -241,7 +253,7 @@ impl TopBar {
         Self
     }
     fn render(&mut self, area: Rect, buf: &mut Buffer, state: &State) {
-        let titles = ["Home", "Search", "History","UserPlaylist"];
+        let titles = ["Home", "Search", "History", "UserPlaylist"];
 
         // Define colors
         let normal_style = Style::default().fg(Color::White);
@@ -254,7 +266,7 @@ impl TopBar {
                 (0, State::Home) => selected_style,
                 (1, State::Search) => selected_style,
                 (2, State::History) => selected_style,
-                (3,State::UserPlaylist) => selected_style,
+                (3, State::UserPlaylist) => selected_style,
                 _ => normal_style,
             };
 
@@ -275,4 +287,3 @@ impl TopBar {
         paragraph.render(area, buf);
     }
 }
-

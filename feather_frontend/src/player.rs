@@ -35,6 +35,7 @@ pub struct SongPlayer {
     song_playing: Arc<Mutex<Option<SongDetails>>>, // Details of the currently playing song
     rx: mpsc::Receiver<bool>,         // Receiver to listen for playback events
     is_playlist: Arc<Mutex<bool>>,
+    rx_playlist_off: mpsc::Receiver<bool>,
 }
 
 impl SongPlayer {
@@ -42,6 +43,7 @@ impl SongPlayer {
         backend: Arc<Backend>,
         rx: mpsc::Receiver<bool>,
         _rx_playlist: mpsc::Receiver<Arc<Mutex<SongDatabase>>>,
+        rx_playlist_off: mpsc::Receiver<bool>,
     ) -> Self {
         let player = Self {
             backend,
@@ -49,6 +51,7 @@ impl SongPlayer {
             song_playing: Arc::new(Mutex::new(None)),
             rx,
             is_playlist: Arc::new(Mutex::new(false)),
+            rx_playlist_off,
         };
         player.observe_time(); // Start observing playback time
         player.observe_song_end(); // Start observing song end for playlists
@@ -111,9 +114,9 @@ impl SongPlayer {
                             };
 
                             if should_play_next {
-                            backend.next_song_playlist().await;
-                            was_playing = false; // Reset after playing next song
-                            idle_count = 0;
+                                backend.next_song_playlist().await;
+                                was_playing = false; // Reset after playing next song
+                                idle_count = 0;
                             }
                         }
                     }
@@ -138,7 +141,7 @@ impl SongPlayer {
             const MAX_IDLE_COUNT: i32 = 10;
             let mut idle_count = 0;
 
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            tokio::time::sleep(Duration::from_secs(15)).await;
 
             loop {
                 let is_playing = match backend.player.is_playing() {
@@ -184,7 +187,7 @@ impl SongPlayer {
                         return;
                     }
                 }
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::time::sleep(Duration::from_secs(4)).await;
             }
         });
     }
@@ -194,28 +197,28 @@ impl SongPlayer {
             if *state == SongState::Playing {
                 match key.code {
                     KeyCode::Char('n') => {
-                        if let Ok(is_playlist) = self.is_playlist.lock(){
-                             if *is_playlist{
+                        if let Ok(is_playlist) = self.is_playlist.lock() {
+                            if *is_playlist {
                                 drop(is_playlist);
                                 let backend = self.backend.clone();
-                                tokio::spawn(async move{
+                                tokio::spawn(async move {
                                     backend.next_song_playlist().await;
                                 });
-                             }
+                            }
                         }
                     }
                     KeyCode::Char('p') => {
-                        if let Ok(is_playlist) = self.is_playlist.lock(){
-                             if *is_playlist{
+                        if let Ok(is_playlist) = self.is_playlist.lock() {
+                            if *is_playlist {
                                 drop(is_playlist);
                                 let backend = self.backend.clone();
-                                tokio::spawn(async move{
+                                tokio::spawn(async move {
                                     backend.prev_song_playlist().await;
                                 });
-                             }
+                            }
                         }
                     }
-                    KeyCode::Up =>  {
+                    KeyCode::Up => {
                         self.backend.player.high_volume().is_ok();
                     }
                     KeyCode::Down => {
@@ -237,6 +240,11 @@ impl SongPlayer {
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        if let Ok(value) = self.rx_playlist_off.try_recv() {
+            if let Ok(mut playlist) = self.is_playlist.lock() {
+                *playlist = false;
+            }
+        }
         if let Ok(is_playlist) = self.rx.try_recv() {
             if let Ok(mut playlist) = self.is_playlist.lock() {
                 if is_playlist {

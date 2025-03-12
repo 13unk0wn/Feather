@@ -282,13 +282,28 @@ impl ListPlaylist {
 
 struct ViewPlayList {
     backend: Arc<Backend>,
+    playlist_name: Option<String>,
     rx: mpsc::Receiver<String>,
+    offset: usize,
 }
 
 impl ViewPlayList {
     fn new(backend: Arc<Backend>, rx: mpsc::Receiver<String>) -> Self {
-        Self { backend, rx }
+        Self {
+            backend,
+            rx,
+            offset: 0,
+            playlist_name: None,
+        }
     }
 
     fn handle_keystrokes(&self) {}
+
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        if let Ok(name) = self.rx.try_recv() {
+            self.playlist_name = Some(name);
+        }
+        let outer_block = Block::default().borders(Borders::ALL);
+        outer_block.render(area, buf);
+    }
 }

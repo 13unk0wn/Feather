@@ -26,7 +26,8 @@ pub struct Backend {
     tx: mpsc::Sender<bool>,
     pub playlist: Arc<Mutex<Option<SongDatabase>>>,
     current_index_playlist: Arc<Mutex<usize>>,
-    pub PlayListManager :  Arc<PlaylistManager>,
+    pub PlayListManager: Arc<PlaylistManager>,
+    tx_playlist_off : mpsc::Sender<bool>,
 }
 
 /// Defines possible errors that can occur in the `Backend`.
@@ -51,15 +52,16 @@ pub enum BackendError {
     PlaylistError(#[from] SongError),
 
     #[error("UserPlayListError : {0}")]
-    UserPlayListError(#[from] PlaylistManagerError)
+    UserPlayListError(#[from] PlaylistManagerError),
 }
 
 impl Backend {
     /// Creates a new `Backend` instance.
-    pub fn new(
+    pub  fn new(
         history: Arc<HistoryDB>,
         cookies: Option<String>,
         tx: mpsc::Sender<bool>,
+        tx_playlist_off : mpsc::Sender<bool>
     ) -> Result<Self, BackendError> {
         Ok(Self {
             current_index_playlist: Arc::new(Mutex::new(0)),
@@ -69,8 +71,17 @@ impl Backend {
             history,
             song: Mutex::new(None),
             tx,
-            PlayListManager  : Arc::new(PlaylistManager::new()?),
+            PlayListManager: Arc::new(PlaylistManager::new()?),
+            tx_playlist_off,
         })
+    }
+
+    pub async fn drop_playlist(&self) -> Result<(), BackendError> {
+        if let Ok(mut playlist) = self.playlist.lock() {
+            *playlist = None;
+        }
+       self.tx_playlist_off.send(false).await;
+        Ok(())
     }
 
     /// Plays a playlist starting at the given index.

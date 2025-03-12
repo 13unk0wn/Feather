@@ -3,6 +3,8 @@ use crate::backend::Backend;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::{ArtistName, SongId, SongName};
 use feather::{PlaylistName, database::Song};
+use log::debug;
+use log::log;
 use ratatui::widgets::Clear;
 use ratatui::{
     buffer::Buffer,
@@ -14,6 +16,7 @@ use ratatui::{
         StatefulWidget, Widget,
     },
 };
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use tokio::{
     sync::mpsc,
@@ -40,9 +43,10 @@ pub struct Search<'a> {
     selected: usize,             // Index of selected result
     selected_song: Option<Song>, // Currently selected song details
     max_len: Option<usize>,      // Total number of search results
-    popup_appear: Arc<Mutex<bool>>,
+    popup_appear: bool,
     popup: PopUpAddPlaylist,
     tx_song: mpsc::Sender<Song>,
+    rx_signal: mpsc::Receiver<bool>,
 }
 
 impl Search<'_> {
@@ -50,7 +54,8 @@ impl Search<'_> {
     pub fn new(backend: Arc<Backend>) -> Self {
         let (tx, rx) = mpsc::channel(32); // Create channel for async search results
         let (tx_song, rx_song) = mpsc::channel(8);
-        let popup_appear = Arc::new(Mutex::new(false));
+        let (tx_signal, rx_signal) = mpsc::channel(1);
+        let popup_appear = false;
         Self {
             query: String::new(),
             state: SearchState::SearchBar,
@@ -65,8 +70,9 @@ impl Search<'_> {
             selected_song: None,
             max_len: None,
             tx_song,
-            popup: PopUpAddPlaylist::new(backend, rx_song),
+            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal),
             popup_appear,
+            rx_signal,
         }
     }
 
@@ -108,12 +114,9 @@ impl Search<'_> {
             }
         } else {
             let mut value = true;
-            if let Ok(popup) = self.popup_appear.lock() {
-                if *popup {
-                    self.popup.handle_keystrokes(key);
-                    value = false;
-                    drop(popup);
-                }
+            if self.popup_appear {
+                self.popup.handle_keystrokes(key);
+                value = false;
             }
             if value {
                 // SearchResults state
@@ -127,9 +130,7 @@ impl Search<'_> {
                             tokio::spawn(async move {
                                 tx.send(song).await;
                             });
-                            if let Ok(mut popup) = self.popup_appear.lock(){
-                                *popup = true;
-                            }
+                            self.popup_appear = true;
                         }
                     }
                     KeyCode::Char('j') | KeyCode::Down => {
@@ -195,6 +196,11 @@ impl Search<'_> {
             self.display_content = true;
         }
 
+        if let Ok(_) = self.rx_signal.try_recv() {
+            self.state = SearchState::SearchResults;
+            self.popup_appear = false;
+        }
+
         // Render search bar
         let search_block = Block::default().title("Search Music").borders(Borders::ALL);
         self.textarea.set_cursor_line_style(Style::default());
@@ -257,19 +263,15 @@ impl Search<'_> {
         // Render outer border
         let outer_block = Block::default().borders(Borders::ALL);
         outer_block.render(area, buf);
-        if let Ok(value) = self.popup_appear.try_lock() {
-            let v = *value;
-            drop(value);
-            if v {
-                let popup_area = Rect {
-                    x: area.x + area.width / 4, // 25% margin on both sides (centers the popup)
-                    y: area.y + area.height / 4, // 25% margin on top and bottom (centers it)
-                    width: area.width / 2,      // 50% of the total width
-                    height: area.height / 2,    // 50% of the total height
-                };
+        if self.popup_appear {
+            let popup_area = Rect {
+                x: area.x + area.width / 4, // 25% margin on both sides (centers the popup)
+                y: area.y + area.height / 4, // 25% margin on top and bottom (centers it)
+                width: area.width / 2,      // 50% of the total width
+                height: area.height / 2,    // 50% of the total height
+            };
 
-                self.popup.render(popup_area, buf);
-            }
+            self.popup.render(popup_area, buf);
         }
     }
 }
@@ -282,13 +284,11 @@ struct PopUpAddPlaylist {
     vertical_scroll_state: ScrollbarState, // Vertical scrollbar state
     selected_song: Option<Song>,
     rx: mpsc::Receiver<Song>,
+    tx_signal: mpsc::Sender<bool>,
 }
 
 impl PopUpAddPlaylist {
-    fn new(
-        backend: Arc<Backend>,
-        rx: mpsc::Receiver<Song>,
-    ) -> Self {
+    fn new(backend: Arc<Backend>, rx: mpsc::Receiver<Song>, tx_signal: mpsc::Sender<bool>) -> Self {
         Self {
             backend,
             max_len: 0,
@@ -297,11 +297,18 @@ impl PopUpAddPlaylist {
             vertical_scroll_state: ScrollbarState::default(),
             selected_song: None,
             rx,
+            tx_signal,
         }
     }
 
     pub fn handle_keystrokes(&mut self, key: KeyEvent) {
         match key.code {
+            KeyCode::Esc => {
+                let tx_signal = self.tx_signal.clone();
+                tokio::spawn(async move {
+                    tx_signal.send(true).await;
+                });
+            }
             KeyCode::Enter => {
                 if let Some(song) = &self.selected_song {
                     if let Some(playlist_name) = &self.selected_playlist_name {
@@ -309,6 +316,10 @@ impl PopUpAddPlaylist {
                             .PlayListManager
                             .add_song_to_playlist(&playlist_name, song.clone())
                             .is_ok();
+                        let tx_signal = self.tx_signal.clone();
+                        tokio::spawn(async move {
+                            tx_signal.send(true).await;
+                        });
                     }
                 }
             }

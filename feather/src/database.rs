@@ -247,9 +247,9 @@ impl Drop for SongDatabase {
 }
 
 impl SongDatabase {
-    pub fn new() -> Result<Self, SongError> {
+    pub fn new(name: &str) -> Result<Self, SongError> {
         let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
-        path.push("Feather/current_playlist");
+        path.push(format!("Feather/{}", name));
 
         // Check if the path exists, and delete accordingly
         if path.exists() {

@@ -412,14 +412,13 @@ impl SeletectPlayListView {
                 sleep(Duration::from_millis(500)).await; // Debounce
                 match backend.yt.fetch_playlist_songs(id).await {
                     Ok(s) => {
-                        if let Ok(mut db) = db.lock() {
-                            let _ = db.take(); // drop the existing db
-                        }
+                        backend.drop_playlist().await;
+
                         if let Ok(mut l) = len_clone.lock() {
                             let value = ((s.len() + page_size - 1) / page_size) * page_size;
                             *l = Some(value);
                         }
-                        let mut db_temp = SongDatabase::new().expect("Failed to Form a Db");
+                        let mut db_temp = SongDatabase::new("userplaylist").expect("Failed to Form a Db");
                         for i in s {
                             let title = i.0.0;
                             let id = i.0.1;
