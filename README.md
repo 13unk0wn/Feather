@@ -3,6 +3,10 @@
 The `v0.2` branch is **not usable**, **unstable**, and **currently in development**.  
 Please use the `main` branch for a stable experience.  
 
+
+
+# KeyBindings
+
 | Key | Action |
 |-----|--------|
 | `:q` | Quit application |
