@@ -1,5 +1,5 @@
 use color_eyre::eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, poll, read};
 use feather::database::HistoryDB;
 use feather_frontend::{backend::Backend, history::History, player::SongPlayer, search::Search};
 use ratatui::{
@@ -74,6 +74,7 @@ impl App<'_> {
 
     /// Handles global keystrokes and state transitions.
     fn handle_global_keystrokes(&mut self, key: KeyEvent) {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL); //detect if ctrl is pressed.
         match self.state {
             State::Global => match key.code {
                 KeyCode::Char('s') => self.state = State::Search,
@@ -83,28 +84,28 @@ impl App<'_> {
                     self.help_mode = true;
                     self.state = State::HelpMode;
                 }
-                KeyCode::Esc => {
+                KeyCode::Esc | KeyCode::Char('c') if ctrl => {
                     self.exit = true;
                 }
                 _ => (),
             },
             State::Search => match key.code {
-                KeyCode::Esc => self.state = State::Global,
+                KeyCode::Esc | KeyCode::Char('c') if ctrl => self.state = State::Global,
                 _ => self.search.handle_keystrokes(key),
             },
             State::HelpMode => match key.code {
-                KeyCode::Esc => {
+                KeyCode::Esc | KeyCode::Char('c') if ctrl => {
                     self.state = State::Global;
                     self.help_mode = false;
                 }
                 _ => (),
             },
             State::History => match key.code {
-                KeyCode::Esc => self.state = State::Global,
+                KeyCode::Esc | KeyCode::Char('c') if ctrl => self.state = State::Global,
                 _ => self.history.handle_keystrokes(key),
             },
             State::SongPlayer => match key.code {
-                KeyCode::Esc => self.state = State::Global,
+                KeyCode::Esc | KeyCode::Char('c') if ctrl => self.state = State::Global,
                 _ => self.player.handle_keystrokes(key),
             },
         }
@@ -149,11 +150,11 @@ impl App<'_> {
                                 Cell::from("Toggle between search input and results"),
                             ]),
                             Row::new(vec![
-                                Cell::from("Esc (Global)"),
+                                Cell::from("Esc / Ctrl + C (Global)"),
                                 Cell::from("Quit application"),
                             ]),
                             Row::new(vec![
-                                Cell::from("Esc (Non-Global)"),
+                                Cell::from("Esc / Ctrl + C (Non-Global)"),
                                 Cell::from("Switch to Global Mode"),
                             ]),
                             Row::new(vec![
