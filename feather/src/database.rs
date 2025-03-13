@@ -372,6 +372,8 @@ pub enum PlaylistManagerError {
     AddSongError(String, String),
     #[error("Failed to remove song '{0}' from playlist '{1}'")]
     RemoveSongError(String, String),
+    #[error("Conversion Error  : {0}")]
+    SongError(#[from] SongError),
     #[error("Unknown error: {0}")]
     Other(String),
 }
@@ -396,6 +398,19 @@ impl PlaylistManager {
         self.db.insert(name, value)?;
         self.db.flush()?;
         Ok(())
+    }
+    pub fn convert_playlist(
+        &self,
+        playlist_name: &str,
+    ) -> Result<SongDatabase, PlaylistManagerError> {
+        let mut song_playlist = SongDatabase::new(playlist_name)?;
+
+        let get_playlist = self.get_playlist(playlist_name)?;
+
+        for i in get_playlist {
+            song_playlist.add_song(i.title, i.id, i.artist_name);
+        }
+        Ok(song_playlist)
     }
     pub fn add_song_to_playlist(
         &self,
@@ -451,11 +466,7 @@ impl PlaylistManager {
         Ok(())
     }
 
-    pub fn get_playlist(
-        &self,
-        playlist_name: &str,
-        offset: usize,
-    ) -> Result<Vec<Song>, PlaylistManagerError> {
+    pub fn get_playlist(&self, playlist_name: &str) -> Result<Vec<Song>, PlaylistManagerError> {
         let data = self
             .db
             .get(playlist_name)?
@@ -467,13 +478,22 @@ impl PlaylistManager {
         playlist.songs.sort_by_key(|song| song.0);
 
         // Use PAGE_SIZE for pagination
-        let songs = playlist
-            .songs
-            .get(offset..offset + PAGE_SIZE)
-            .unwrap_or(&[])
+        let songs = playlist.songs.into_iter().map(|s| s.1).collect::<Vec<_>>();
+        Ok(songs)
+    }
+    pub fn get_user_playlist(
+        &self,
+        playlist_name: &str,
+    ) -> Result<UserPlaylist, PlaylistManagerError> {
+        let raw_data = self
+            .db
+            .get(playlist_name)?
+            .ok_or_else(|| PlaylistManagerError::PlaylistNotFound(playlist_name.to_string()))?
             .to_vec();
-        let new_songs = songs.into_iter().map(|i| i.1).collect::<Vec<_>>();
-        Ok(new_songs)
+
+        let user_playlist: UserPlaylist = bincode::deserialize(&raw_data)?;
+
+        Ok(user_playlist) // Now explicitly returning a `UserPlaylist`
     }
 
     pub fn delete_playlist(&self, playlist_name: &str) -> Result<(), PlaylistManagerError> {

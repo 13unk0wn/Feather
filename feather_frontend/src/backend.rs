@@ -81,6 +81,7 @@ impl Backend {
             *playlist = None;
         }
        self.tx_playlist_off.send(false).await;
+       self.loop_player(true)?;
         Ok(())
     }
 

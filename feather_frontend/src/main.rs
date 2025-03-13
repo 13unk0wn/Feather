@@ -100,12 +100,12 @@ impl App<'_> {
             Backend::new(history.clone(), get_cookies, tx.clone(), tx_playlist_off).unwrap(),
         );
         let search = Search::new(backend.clone());
-        let playlist_search = PlayListSearch::new(backend.clone(), tx_playlist);
+        let playlist_search = PlayListSearch::new(backend.clone(),tx_playlist.clone());
 
         App {
             state: State::Global,
             search: SearchMain::new(search, playlist_search),
-            userplaylist: UserPlayList::new(backend.clone()),
+            userplaylist: UserPlayList::new(backend.clone(),tx_playlist.clone()),
             history: History::new(history, backend.clone()),
             help: Help::new(),
             home: Home::new(),
@@ -217,6 +217,9 @@ impl App<'_> {
                                         }
                                         State::History => {
                                             self.history.render(layout[1], frame.buffer_mut())
+                                        }
+                                        State::UserPlaylist => {
+                                            self.userplaylist.render(layout[1], frame.buffer_mut());
                                         }
                                         _ => (),
                                     }
