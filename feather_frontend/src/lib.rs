@@ -4,6 +4,7 @@ pub mod history;
 pub mod home;
 pub mod player;
 pub mod playlist_search;
+pub mod popup_playlist;
 pub mod search;
 pub mod search_main;
 pub mod userplaylist;

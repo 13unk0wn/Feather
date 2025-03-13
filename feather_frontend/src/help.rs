@@ -4,6 +4,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Row, Table, Widget},
 };
 
+// Currently these key-bindings are not valid
 pub struct Help;
 
 impl Help {

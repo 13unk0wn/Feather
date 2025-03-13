@@ -1,8 +1,9 @@
 #![allow(unused)]
-use feather::database::Song;
-use crate::backend::{Backend};
+use crate::backend::Backend;
+use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::database::HistoryDB;
+use feather::database::Song;
 use ratatui::prelude::{Buffer, Color, Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::Span;
@@ -21,53 +22,75 @@ pub struct History {
     max_len: usize,                        // Total number of history items
     selected_song: Option<Song>,           // Currently selected song details
     backend: Arc<Backend>,                 // Audio backend for playback
+    tx_song: mpsc::Sender<Song>,
+    popup_appear: bool,
+    popup: PopUpAddPlaylist,
+    rx_signal : mpsc::Receiver<bool>,
 }
 
 impl History {
     // Constructor initializing the History struct
-    pub fn new(
-        history: Arc<HistoryDB>,
-        backend: Arc<Backend>,
-    ) -> Self {
+    pub fn new(history: Arc<HistoryDB>, backend: Arc<Backend>) -> Self {
+        let (tx_song, rx_song) = mpsc::channel(8);
+        let (tx_signal, rx_signal) = mpsc::channel(1);
         Self {
             history,
             selected: 0,
             vertical_scroll_state: ScrollbarState::default(),
             max_len: 0,
             selected_song: None,
-            backend,
+            backend: backend.clone(),
+            tx_song,
+            popup_appear: false,
+            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal),
+            rx_signal,
         }
     }
 
     // Handles keyboard input for navigation and actions
     pub fn handle_keystrokes(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                // Move selection down
-                self.select_next();
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                // Move selection up
-                self.select_previous();
-            }
-            KeyCode::Char('d') => {
-                // Delete selected entry
-                if let Some(song) = &self.selected_song {
-                    let _ = self.history.delete_entry(&song.id);
+        let mut value = true;
+        if self.popup_appear {
+            self.popup.handle_keystrokes(key);
+            value = false;
+        }
+        if value {
+            match key.code {
+                KeyCode::Char('a') => {
+                    if let Some(song) = self.selected_song.clone() {
+                        let tx = self.tx_song.clone();
+                        tokio::spawn(async move {
+                            tx.send(song).await;
+                        });
+                        self.popup_appear = true;
+                    }
                 }
-            }
-            KeyCode::Enter => {
-                // Play selected song
-                if let Some(song) = self.selected_song.clone() {
-                    let backend = Arc::clone(&self.backend);
-                    tokio::spawn(async move {
-                        // Spawn async task for playback
-                        if backend.play_music(song,false).await.is_ok() {
-                        }
-                    });
+                KeyCode::Char('j') | KeyCode::Down => {
+                    // Move selection down
+                    self.select_next();
                 }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    // Move selection up
+                    self.select_previous();
+                }
+                KeyCode::Char('d') => {
+                    // Delete selected entry
+                    if let Some(song) = &self.selected_song {
+                        let _ = self.history.delete_entry(&song.id);
+                    }
+                }
+                KeyCode::Enter => {
+                    // Play selected song
+                    if let Some(song) = self.selected_song.clone() {
+                        let backend = Arc::clone(&self.backend);
+                        tokio::spawn(async move {
+                            // Spawn async task for playback
+                            if backend.play_music(song, false).await.is_ok() {}
+                        });
+                    }
+                }
+                _ => (), // Ignore other keys
             }
-            _ => (), // Ignore other keys
         }
     }
 
@@ -87,6 +110,9 @@ impl History {
 
     // Renders the history UI component
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        if let Ok(_) = self.rx_signal.try_recv() {
+            self.popup_appear = false;
+        }
         // Setup history list area with scrollbar
         let history_area = area;
         let scrollbar = Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
@@ -139,6 +165,16 @@ impl History {
             self.max_len = 0;
             self.selected = 0;
             Paragraph::new("Failed to load history").render(history_area, buf);
+        }
+        if self.popup_appear {
+            let popup_area = Rect {
+                x: area.x + area.width / 4, // 25% margin on both sides (centers the popup)
+                y: area.y + area.height / 4, // 25% margin on top and bottom (centers it)
+                width: area.width / 2,      // 50% of the total width
+                height: area.height / 2,    // 50% of the total height
+            };
+
+            self.popup.render(popup_area, buf);
         }
     }
 }
