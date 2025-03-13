@@ -150,11 +150,11 @@ impl App<'_> {
                                 Cell::from("Toggle between search input and results"),
                             ]),
                             Row::new(vec![
-                                Cell::from("Esc / Ctrl + C (Global)"),
+                                Cell::from("Esc / Ctrl + c (Global)"),
                                 Cell::from("Quit application"),
                             ]),
                             Row::new(vec![
-                                Cell::from("Esc / Ctrl + C (Non-Global)"),
+                                Cell::from("Esc / Ctrl + c (Non-Global)"),
                                 Cell::from("Switch to Global Mode"),
                             ]),
                             Row::new(vec![
