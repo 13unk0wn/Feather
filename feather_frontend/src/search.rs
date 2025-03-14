@@ -1,12 +1,16 @@
 #![allow(unused)]
-use crate::popup_playlist::PopUpAddPlaylist;
 use crate::backend::Backend;
+use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::{ArtistName, SongId, SongName};
 use feather::{PlaylistName, database::Song};
 use log::debug;
 use log::log;
+use ratatui::buffer;
+use ratatui::prelude::Margin;
+use ratatui::symbols::scrollbar;
 use ratatui::widgets::Clear;
+use ratatui::widgets::ScrollbarOrientation;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -180,12 +184,10 @@ impl Search<'_> {
             .constraints([
                 Constraint::Length(3), // Search bar height
                 Constraint::Min(0),    // Results area
-                Constraint::Length(3), // Bottom bar
             ])
             .split(area);
         let searchbar_area = chunks[0];
         let results_area = chunks[1];
-        let bottom_area = chunks[2];
 
         // Check for new search results
         if let Ok(response) = self.rx.try_recv() {
@@ -210,13 +212,6 @@ impl Search<'_> {
         self.textarea.set_style(Style::default().fg(Color::White));
         self.textarea.set_block(search_block);
         self.textarea.render(searchbar_area, buf);
-
-        // Render vertical scrollbar
-        let vertical_scrollbar =
-            Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("↑"))
-                .end_symbol(Some("↓"));
-        vertical_scrollbar.render(results_area, buf, &mut self.vertical_scroll_state);
 
         // Render search results if available
         if self.display_content {
@@ -255,12 +250,6 @@ impl Search<'_> {
             }
         }
 
-        // Render bottom help bar
-        let bottom_bar = Paragraph::new("Press '?' for Help in Global Mode")
-            .style(Style::default().fg(Color::White))
-            .block(Block::default().borders(Borders::ALL));
-        bottom_bar.render(bottom_area, buf); // Note: custom_area undefined, likely should be bottom_area
-
         // Render outer border
         let outer_block = Block::default().borders(Borders::ALL);
         outer_block.render(area, buf);
@@ -276,4 +265,3 @@ impl Search<'_> {
         }
     }
 }
-

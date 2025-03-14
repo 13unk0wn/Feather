@@ -100,12 +100,12 @@ impl App<'_> {
             Backend::new(history.clone(), get_cookies, tx.clone(), tx_playlist_off).unwrap(),
         );
         let search = Search::new(backend.clone());
-        let playlist_search = PlayListSearch::new(backend.clone(),tx_playlist.clone());
+        let playlist_search = PlayListSearch::new(backend.clone(), tx_playlist.clone());
 
         App {
             state: State::Global,
             search: SearchMain::new(search, playlist_search),
-            userplaylist: UserPlayList::new(backend.clone(),tx_playlist.clone()),
+            userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone()),
             history: History::new(history, backend.clone()),
             help: Help::new(),
             home: Home::new(),
@@ -187,7 +187,7 @@ impl App<'_> {
                     let layout = Layout::default()
                         .direction(ratatui::layout::Direction::Vertical)
                         .constraints([
-                            Constraint::Length(3),
+                            Constraint::Length(4),
                             Constraint::Min(0),
                             Constraint::Length(5),
                         ])
@@ -255,8 +255,13 @@ impl TopBar {
     fn new() -> Self {
         Self
     }
-    fn render(&mut self, area: Rect, buf: &mut Buffer, state: &State) {
+    fn render(&mut self, mut area: Rect, buf: &mut Buffer, state: &State) {
         let titles = ["Home", "Search", "History", "UserPlaylist"];
+
+        // Add top padding by shifting the area down
+        let top_padding = 1;
+        area.y += top_padding;
+        area.height = area.height.saturating_sub(top_padding);
 
         // Define colors
         let normal_style = Style::default().fg(Color::White);
@@ -284,6 +289,8 @@ impl TopBar {
         let paragraph = Paragraph::new(text).alignment(Alignment::Left).block(
             Block::default()
                 .borders(Borders::ALL)
+                .title("Feather v0.2")
+                .title_alignment(Alignment::Center)
                 .padding(Padding::new(1, 0, 0, 0)),
         );
 

@@ -64,19 +64,12 @@ impl<'a> SearchMain<'a> {
     }
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let chunks = Layout::default()
-            .constraints([Constraint::Length(3), Constraint::Min(0)])
+            .constraints([Constraint::Min(0)])
             .split(area);
 
-        let s = format!("Current Search Mode : {:?}", self.state);
-        let block = Paragraph::new(s)
-            .alignment(Alignment::Left)
-            .block(Block::default().borders(Borders::ALL));
-
-        block.render(chunks[0], buf);
-
         match self.state {
-            SearchMainState::SongSearch => self.search.render(chunks[1], buf),
-            _ => self.playlist_search.render(chunks[1], buf),
+            SearchMainState::SongSearch => self.search.render(chunks[0], buf),
+            _ => self.playlist_search.render(chunks[0], buf),
         }
     }
 }
