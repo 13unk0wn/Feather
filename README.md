@@ -82,7 +82,7 @@ Windows and Macos are not officially supported.
 
 ## 🤝 Contributing
 
-Contributions are welcome! If you'd like to contribute, feel free to submit issues or pull requests.
+Check out [CONTRIBUTION.md](https://github.com/13unk0wn/Feather/blob/main/CONTRIBUTING.md)
 
 If you have any doubts regarding contribution, feel free to reach out via:
 - GitHub Issues
