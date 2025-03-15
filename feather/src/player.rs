@@ -80,7 +80,7 @@ impl Player {
         Ok(())
     }
 
-    fn current_volume(&self) -> Result<i64, MpvError> {
+    pub fn current_volume(&self) -> Result<i64, MpvError> {
         Ok(self.player.get_property("volume")?)
     }
 

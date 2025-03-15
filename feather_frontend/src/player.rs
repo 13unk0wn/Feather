@@ -1,17 +1,26 @@
 #![allow(unused)]
 use crate::backend::Backend;
 use crate::playlist_search;
+use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::database::{Song, SongDatabase};
 use log::{debug, error, info};
+use ratatui::layout::{Constraint, Layout};
+use ratatui::prelude::Direction;
+use ratatui::prelude::Stylize;
 use ratatui::prelude::{Alignment, Buffer, Rect};
+use ratatui::style::Color;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
+use ratatui::widgets::{BorderType, Gauge};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task;
+
+const PLAY: &str = "▶";
+const PAUSE: &str = "❚❚";
 
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
 enum SongState {
@@ -27,6 +36,8 @@ pub struct SongDetails {
     current_time: String,   // Current playback time (formatted as MM:SS)
     total_duration: String, // Total duration of the song
     tries: usize,
+    current_volume: i64,
+    pause: bool,
 }
 
 pub struct SongPlayer {
@@ -168,6 +179,8 @@ impl SongPlayer {
                                         duration / 60,
                                         duration % 60
                                     ),
+                                    current_volume: backend.player.current_volume().unwrap_or(0),
+                                    pause: backend.player.is_playing().unwrap_or(false),
                                     tries: 0,
                                 });
                             }
@@ -219,14 +232,36 @@ impl SongPlayer {
                         }
                     }
                     KeyCode::Up => {
-                        self.backend.player.high_volume().is_ok();
+                        if self.backend.player.high_volume().is_ok() {
+                            if let Ok(mut song_details) = self.song_playing.lock() {
+                                if let Some(song) = song_details.as_mut() {
+                                    song.current_volume =
+                                        self.backend.player.current_volume().unwrap_or(0);
+                                    debug!("{}", song.current_volume);
+                                }
+                            }
+                        }
                     }
                     KeyCode::Down => {
-                        self.backend.player.low_volume().is_ok();
+                        if self.backend.player.low_volume().is_ok() {
+                            if let Ok(mut song_details) = self.song_playing.lock() {
+                                if let Some(song) = song_details.as_mut() {
+                                    song.current_volume =
+                                        self.backend.player.current_volume().unwrap_or(0);
+                                }
+                            }
+                        }
                     }
                     KeyCode::Char(' ') | KeyCode::Char(';') => {
-                        if let Ok(_) = self.backend.player.play_pause() {};
+                        if let Ok(_) = self.backend.player.play_pause() {
+                            if let Ok(mut song_details) = self.song_playing.lock() {
+                                if let Some(song) = song_details.as_mut() {
+                                    song.pause = !song.pause;
+                                }
+                            }
+                        }
                     }
+
                     KeyCode::Right | KeyCode::Char('l') => {
                         self.backend.player.seek_forward().ok();
                     }
@@ -238,7 +273,6 @@ impl SongPlayer {
             }
         }
     }
-
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         if let Ok(value) = self.rx_playlist_off.try_recv() {
             if let Ok(mut playlist) = self.is_playlist.lock() {
@@ -260,50 +294,131 @@ impl SongPlayer {
             self.check_playing();
         }
 
-        let block = Block::default().borders(Borders::ALL);
-        let inner = block.inner(area);
-        block.render(area, buf);
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(10), // Pause/Player
+                Constraint::Min(0),     // Player
+                Constraint::Length(20), // Volume
+            ])
+            .split(area);
+
+        let mut title = None;
+        let mut percentage = 0.0;
+        let mut volume = 0;
+        let mut text = vec![Line::from("")];
+        let mut pause = false;
 
         if let Ok(state) = self.songstate.lock() {
-            let text = match *state {
+            text = match *state {
                 SongState::Idle => vec![Line::from("No song is playing")],
                 SongState::Playing => {
                     if let Ok(mut song_playing) = self.song_playing.lock() {
                         song_playing.as_mut().map_or_else(
                             || vec![Line::from("Loading...")],
                             |song| {
-                                if song.tries < 3 && song.total_duration == "00::00" {
+                                if song.tries < 3 && song.total_duration == "00:00" {
                                     song.total_duration = self.backend.player.duration();
                                     song.tries += 1;
                                 }
-                                let current_time = song
+                                title = Some(song.song.title.clone());
+                                volume = song.current_volume;
+                                pause = song.pause;
+
+                                let current_time_secs = song
                                     .current_time
-                                    .parse::<i64>()
-                                    .map(|t| format!("{:02}:{:02}", t / 60, t % 60))
-                                    .unwrap_or_default();
-                                vec![
-                                    Line::from(Span::styled(
-                                        song.song.title.clone(),
-                                        Style::default().add_modifier(Modifier::BOLD),
-                                    )),
-                                    Line::from(format!("{}/{}", current_time, song.total_duration)),
-                                ]
+                                    .split(':')
+                                    .filter_map(|s| s.parse::<i64>().ok())
+                                    .reduce(|acc, x| acc * 60 + x)
+                                    .unwrap_or(0);
+
+                                let total_time_secs = song
+                                    .total_duration
+                                    .split(':')
+                                    .filter_map(|s| s.parse::<i64>().ok())
+                                    .reduce(|acc, x| acc * 60 + x)
+                                    .unwrap_or(1);
+
+                                percentage = current_time_secs as f64 / total_time_secs as f64;
+
+                                let current_time = format!(
+                                    "{:02}:{:02}",
+                                    current_time_secs / 60,
+                                    current_time_secs % 60
+                                );
+                                vec![Line::from(format!(
+                                    "{}/{}",
+                                    current_time, song.total_duration
+                                ))]
                             },
                         )
                     } else {
                         vec![Line::from("Error accessing song details")]
                     }
                 }
-                SongState::Loading => {
-                    vec![Line::from("Loading...")]
-                }
-                SongState::ErrorPlayingoSong => {
-                    vec![Line::from("Error Playing Song")]
-                }
+                SongState::Loading => vec![Line::from("Loading...")],
+                SongState::ErrorPlayingoSong => vec![Line::from("Error Playing Song")],
             };
-            Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .render(inner, buf);
+
+            match *state {
+                SongState::Playing => {
+                    if let Some(title) = title {
+                        let block = Block::default()
+                            .borders(Borders::ALL)
+                            .title(title)
+                            .title_alignment(Alignment::Center)
+                            .border_type(BorderType::Rounded);
+
+                        let label_text =
+                            text.get(0).map(|line| line.to_string()).unwrap_or_default();
+
+                        let gauge = Gauge::default()
+                            .block(block)
+                            .gauge_style(Style::default().fg(Color::White))
+                            .ratio(percentage)
+                            .label(Span::styled(label_text, Style::default().fg(Color::Blue)));
+
+                        gauge.render(chunks[1], buf);
+                    }
+                }
+                SongState::ErrorPlayingoSong | SongState::Loading | SongState::Idle => {
+                    let border = Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded);
+
+                    let inner_area = border.inner(chunks[1]);
+                    border.render(chunks[1], buf);
+
+                    Paragraph::new(text)
+                        .alignment(Alignment::Center)
+                        .render(inner_area, buf);
+                }
+            }
         }
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title_alignment(Alignment::Center)
+            .border_type(BorderType::Rounded);
+
+        let inner_block = block.inner(chunks[0]);
+        block.render(chunks[0], buf);
+        let icon = if pause { PAUSE } else { PLAY };
+        let mut text = Paragraph::new(icon)
+            .alignment(Alignment::Center)
+            .render(inner_block, buf);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("Volume")
+            .title_alignment(Alignment::Center)
+            .border_type(BorderType::Rounded);
+        let gauge = Gauge::default()
+            .block(block)
+            .gauge_style(Style::default().fg(Color::White))
+            .ratio((volume as f64) / 100.0)
+            .label(Span::styled(
+                format!("{}", volume),
+                Style::default().fg(Color::Blue),
+            ));
+        gauge.render(chunks[2], buf);
     }
 }
