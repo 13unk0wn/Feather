@@ -125,6 +125,7 @@ impl App<'_> {
                 if let Ok(next_key) = crossterm::event::read() {
                     if let Event::Key(next_key) = next_key {
                         match next_key.code {
+                            KeyCode::Char(';') => self.state = State::Home,
                             KeyCode::Char('s') => self.state = State::Search,
                             KeyCode::Char('u') => self.state = State::UserPlaylist,
                             KeyCode::Char('h') => self.state = State::History,

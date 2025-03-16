@@ -6,6 +6,7 @@ use log::log;
 use std::fs;
 use std::fs::File;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::SystemTimeError;
 // This file manages the history database and contains all necessary functions related to history management
 use crate::{ArtistName, SongId, SongName};
@@ -136,18 +137,6 @@ impl HistoryDB {
             self.db.insert(key, new_value)?;
         }
 
-        self.limit_history_size(50)?;
-        Ok(())
-    }
-
-    /// Ensures the history database does not exceed `max_size` entries.
-    /// Removes the oldest entries if necessary.
-    pub fn limit_history_size(&self, max_size: usize) -> Result<(), HistoryError> {
-        while self.db.len() > max_size {
-            if let Some((key, _)) = self.db.first()? {
-                self.db.remove(key)?;
-            }
-        }
         Ok(())
     }
 
@@ -297,6 +286,7 @@ impl SongDatabase {
             Err(SongError::SongNotFound)
         }
     }
+    //TODO :  Change the logic it  is not working
     pub fn next_page(&self, offset: usize) -> Result<Vec<Song>, SongError> {
         let mut songs: Vec<Song> = self
             .db
@@ -503,6 +493,25 @@ impl PlaylistManager {
         self.db.flush()?;
         Ok(())
     }
+}
+
+// #[derive(Serialize, Deserialize, Debug)]
+// struct UserProfile {
+//     name: String,
+//     ascii_image: String,
+//     uptime: u64,
+//     last_played: String,
+//     total_songs_played: u64,
+// }
+// impl UserProfile {
+//     fn new(name: String, ascii_image: String, uptime: u64) -> Self {
+//         UserProfile { name, ascii_image,last_played  :  };
+//         unimplemented!()
+//     }
+// }
+
+struct UserProfileDb {
+    db: sled::Db,
 }
 
 // // Tests unchanged...
