@@ -5,10 +5,12 @@ use feather::database::HistoryDB;
 use feather_frontend::home::Home;
 use feather_frontend::playlist_search::PlayListSearch;
 use feather_frontend::search_main::SearchMain;
+use feather_frontend::statusbar::StatusBar;
 use feather_frontend::userplaylist::UserPlayList;
 use feather_frontend::{
     backend::Backend, help::Help, history::History, player::SongPlayer, search::Search,
 };
+use feather_frontend::{statusbar, State};
 use ratatui::prelude::Alignment;
 use ratatui::style::Color;
 use ratatui::style::Style;
@@ -59,18 +61,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Enum representing different states of the application.
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum State {
-    Home,
-    HelpMode,
-    Global,
-    Search,
-    History,
-    UserPlaylist,
-    // CurrentPlayingPlaylist,
-    SongPlayer,
-}
 
 /// Main application struct managing the state and UI components.
 struct App<'a> {
@@ -81,6 +71,7 @@ struct App<'a> {
     help: Help,
     top_bar: TopBar,
     player: SongPlayer,
+    status_bar : StatusBar,
     // backend: Arc<Backend>,
     help_mode: bool,
     exit: bool,
@@ -103,7 +94,7 @@ impl App<'_> {
         let playlist_search = PlayListSearch::new(backend.clone(), tx_playlist.clone());
 
         App {
-            state: State::Global,
+            state: State::Home,
             search: SearchMain::new(search, playlist_search),
             userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone()),
             history: History::new(history, backend.clone()),
@@ -115,6 +106,7 @@ impl App<'_> {
             // backend,
             help_mode: false,
             exit: false,
+            status_bar  : StatusBar::new(),
             prev_state: None,
         }
     }
@@ -159,7 +151,6 @@ impl App<'_> {
             },
             State::HelpMode => match key.code {
                 KeyCode::Esc => {
-                    self.state = State::Global;
                     self.help_mode = false;
                 }
                 _ => (),
@@ -191,6 +182,7 @@ impl App<'_> {
                             Constraint::Length(4),
                             Constraint::Min(0),
                             Constraint::Length(3),
+                            Constraint::Length(2)
                         ])
                         .split(area);
 
@@ -229,6 +221,7 @@ impl App<'_> {
                             _ => (),
                         }
                         self.player.render(layout[2], frame.buffer_mut());
+                        self.status_bar.render(layout[3], frame.buffer_mut(), self.state);
                     } else {
                         self.help.render(layout[1], frame.buffer_mut());
                     }
