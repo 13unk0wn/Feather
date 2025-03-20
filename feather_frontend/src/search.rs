@@ -209,7 +209,6 @@ impl Search<'_> {
         self.textarea.set_cursor_line_style(Style::default());
         self.textarea
             .set_placeholder_text("Search Song or Playlist");
-        self.textarea.set_style(Style::default().fg(Color::White));
         self.textarea.set_block(search_block);
         self.textarea.render(searchbar_area, buf);
 

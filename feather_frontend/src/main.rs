@@ -2,15 +2,16 @@
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
 use feather::database::HistoryDB;
+use feather_frontend::config::USERCONFIG;
 use feather_frontend::home::Home;
 use feather_frontend::playlist_search::PlayListSearch;
 use feather_frontend::search_main::SearchMain;
 use feather_frontend::statusbar::StatusBar;
 use feather_frontend::userplaylist::UserPlayList;
+use feather_frontend::{State, statusbar};
 use feather_frontend::{
     backend::Backend, help::Help, history::History, player::SongPlayer, search::Search,
 };
-use feather_frontend::{statusbar, State};
 use ratatui::prelude::Alignment;
 use ratatui::style::Color;
 use ratatui::style::Style;
@@ -61,7 +62,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-
 /// Main application struct managing the state and UI components.
 struct App<'a> {
     state: State,
@@ -71,7 +71,8 @@ struct App<'a> {
     help: Help,
     top_bar: TopBar,
     player: SongPlayer,
-    status_bar : StatusBar,
+    status_bar: StatusBar,
+    user_config: USERCONFIG,
     // backend: Arc<Backend>,
     help_mode: bool,
     exit: bool,
@@ -94,6 +95,7 @@ impl App<'_> {
         let playlist_search = PlayListSearch::new(backend.clone(), tx_playlist.clone());
 
         App {
+            user_config: USERCONFIG::new().unwrap(), // unwrap because application should not be able to run without valid config
             state: State::Home,
             search: SearchMain::new(search, playlist_search),
             userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone()),
@@ -106,7 +108,7 @@ impl App<'_> {
             // backend,
             help_mode: false,
             exit: false,
-            status_bar  : StatusBar::new(),
+            status_bar: StatusBar::new(),
             prev_state: None,
         }
     }
@@ -172,6 +174,13 @@ impl App<'_> {
     async fn render(mut self, mut terminal: DefaultTerminal) {
         let mut redraw_interval = interval(Duration::from_millis(250)); // Redraw every 250ms
 
+        let bg_color = self.user_config.bg_color;
+        let text_color = self.user_config.text_color;
+
+        let global_style = Style::default()
+            .fg(Color::Rgb(text_color.0, text_color.1, text_color.2))
+            .bg(Color::Rgb(bg_color.0, bg_color.1, bg_color.2));
+
         while !self.exit {
             terminal
                 .draw(|frame| {
@@ -182,7 +191,7 @@ impl App<'_> {
                             Constraint::Length(4),
                             Constraint::Min(0),
                             Constraint::Length(3),
-                            Constraint::Length(2)
+                            Constraint::Length(2),
                         ])
                         .split(area);
 
@@ -190,10 +199,7 @@ impl App<'_> {
                         .render(layout[0], frame.buffer_mut(), &self.state);
 
                     // Background for the whole UI
-                    frame.render_widget(
-                        Block::default().style(Style::default().bg(Color::Rgb(10, 10, 30))),
-                        area,
-                    );
+                    frame.render_widget(Block::default().style(global_style), area);
 
                     if !self.help_mode {
                         match self.state {
@@ -221,7 +227,8 @@ impl App<'_> {
                             _ => (),
                         }
                         self.player.render(layout[2], frame.buffer_mut());
-                        self.status_bar.render(layout[3], frame.buffer_mut(), self.state);
+                        self.status_bar
+                            .render(layout[3], frame.buffer_mut(), self.state);
                     } else {
                         self.help.render(layout[1], frame.buffer_mut());
                     }
