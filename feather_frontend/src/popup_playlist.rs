@@ -1,10 +1,10 @@
 #![allow(unused)]
-use ratatui::widgets::List;
 use crate::backend::Backend;
+use crate::config::USERCONFIG;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use feather::database::Song;
 use feather::PlaylistName;
+use feather::database::Song;
 use ratatui::prelude::Buffer;
 use ratatui::prelude::Rect;
 use ratatui::prelude::StatefulWidget;
@@ -15,10 +15,12 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Clear;
+use ratatui::widgets::List;
 use ratatui::widgets::ListItem;
 use ratatui::widgets::ListState;
 use ratatui::widgets::Scrollbar;
 use ratatui::widgets::ScrollbarState;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -31,10 +33,16 @@ pub struct PopUpAddPlaylist {
     selected_song: Option<Song>,
     rx: mpsc::Receiver<Song>,
     tx_signal: mpsc::Sender<bool>,
+    config: Rc<USERCONFIG>,
 }
 
 impl PopUpAddPlaylist {
-    pub fn new(backend: Arc<Backend>, rx: mpsc::Receiver<Song>, tx_signal: mpsc::Sender<bool>) -> Self {
+    pub fn new(
+        backend: Arc<Backend>,
+        rx: mpsc::Receiver<Song>,
+        tx_signal: mpsc::Sender<bool>,
+        config: Rc<USERCONFIG>,
+    ) -> Self {
         Self {
             backend,
             max_len: 0,
@@ -44,6 +52,7 @@ impl PopUpAddPlaylist {
             selected_song: None,
             rx,
             tx_signal,
+            config,
         }
     }
 
@@ -99,12 +108,23 @@ impl PopUpAddPlaylist {
             self.selected_song = Some(song);
         }
         Clear.render(area, buf);
+
+        let bg_color = self.config.bg_color;
+        let text_color = self.config.text_color;
+        let global_style = Style::default()
+            .fg(Color::Rgb(text_color.0, text_color.1, text_color.2))
+            .bg(Color::Rgb(bg_color.0, bg_color.1, bg_color.2));
+
+        Block::default().style(global_style).render(area, buf);
+
         // Render vertical scrollbar
         let vertical_scrollbar =
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"));
         vertical_scrollbar.render(area, buf, &mut self.vertical_scroll_state);
+        let selected_item_text_color = self.config.selected_list_item;
+        let selected_item_bg = self.config.selected_tab_color; 
         if let Ok(playlist_names) = self.backend.PlayListManager.list_playlists() {
             self.max_len = playlist_names.len();
             let view_items: Vec<ListItem> = playlist_names
@@ -116,7 +136,7 @@ impl PopUpAddPlaylist {
                     let style = if is_selected {
                         self.selected_playlist_name = Some(item.clone());
                         // Highlight selected item
-                        Style::default().fg(Color::Yellow).bg(Color::Blue)
+                                Style::default().fg(Color::Rgb(selected_item_text_color.0, selected_item_text_color.1, selected_item_text_color.0)).bg(Color::Rgb(selected_item_bg.0, selected_item_bg.1, selected_item_bg.2))
                     } else {
                         Style::default()
                     };
@@ -131,7 +151,7 @@ impl PopUpAddPlaylist {
                 // Render the list
                 List::new(view_items)
                     .block(Block::default().borders(Borders::ALL))
-                    .highlight_symbol("▶"),
+                    .highlight_symbol(&self.config.selected_item_char),
                 area,
                 buf,
                 &mut list_state,

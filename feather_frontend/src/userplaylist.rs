@@ -25,13 +25,17 @@ use ratatui::widgets::ListState;
 use ratatui::widgets::Scrollbar;
 use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::Widget;
+use simplelog::Config;
 use std::collections::linked_list;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 
 use crate::backend::Backend;
+use crate::config;
+use crate::config::USERCONFIG;
 
 #[derive(PartialEq)]
 enum State {
@@ -51,17 +55,21 @@ pub struct UserPlayList<'a> {
 }
 
 impl<'a> UserPlayList<'a> {
-    pub fn new(backend: Arc<Backend>, tx_play: mpsc::Sender<Arc<Mutex<SongDatabase>>>) -> Self {
+    pub fn new(
+        backend: Arc<Backend>,
+        tx_play: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+        config: Rc<USERCONFIG>,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(1);
         let (tx_playlist, rx_playlist) = mpsc::channel(32);
         let popup = Arc::new(Mutex::new(false));
         let state = State::AllPlayList;
         Self {
             backend: backend.clone(),
-            list_playlist: ListPlaylist::new(backend.clone(), tx_playlist),
-            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play),
+            list_playlist: ListPlaylist::new(backend.clone(), tx_playlist, config.clone()),
+            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play,config.clone()),
             state,
-            new_playlist: NewPlayList::new(backend, popup.clone(), tx),
+            new_playlist: NewPlayList::new(backend, popup.clone(), tx,config),
             popup: popup,
             rx,
         }
@@ -131,16 +139,18 @@ struct NewPlayList<'a> {
     popup: Arc<Mutex<bool>>,
     backend: Arc<Backend>,
     tx: mpsc::Sender<bool>,
+    config  : Rc<USERCONFIG>,
 }
 
 impl<'a> NewPlayList<'a> {
-    pub fn new(backend: Arc<Backend>, popup: Arc<Mutex<bool>>, tx: mpsc::Sender<bool>) -> Self {
+    pub fn new(backend: Arc<Backend>, popup: Arc<Mutex<bool>>, tx: mpsc::Sender<bool>,config  : Rc<USERCONFIG>) -> Self {
         Self {
             textarea: TextArea::default(),
             playlistname: String::new(),
             backend,
             popup: popup,
             tx,
+            config,
         }
     }
 
@@ -186,6 +196,12 @@ impl<'a> NewPlayList<'a> {
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         // debug!("{:?}", "Should appear 2");
         Clear.render(area, buf);
+        let bg_color = self.config.bg_color;
+        let text_color = self.config.text_color;
+        let global_style = Style::default()
+            .fg(Color::Rgb(text_color.0, text_color.1, text_color.2))
+            .bg(Color::Rgb(bg_color.0, bg_color.1, bg_color.2));
+        Block::default().style(global_style).render(area, buf);
         let search_block = Block::default()
             .title("Create New PlayList")
             .borders(Borders::ALL);
@@ -204,10 +220,11 @@ struct ListPlaylist {
     vertical_scroll_state: ScrollbarState,
     selected_playlist_name: Option<String>,
     tx: mpsc::Sender<String>,
+    config: Rc<USERCONFIG>,
 }
 
 impl ListPlaylist {
-    fn new(backend: Arc<Backend>, tx: mpsc::Sender<String>) -> Self {
+    fn new(backend: Arc<Backend>, tx: mpsc::Sender<String>, config: Rc<USERCONFIG>) -> Self {
         ListPlaylist {
             backend,
             selected: 0,
@@ -215,6 +232,7 @@ impl ListPlaylist {
             vertical_scroll_state: ScrollbarState::default(),
             selected_playlist_name: None,
             tx,
+            config,
         }
     }
 
@@ -260,6 +278,8 @@ impl ListPlaylist {
             .end_symbol(Some("↓"));
         scrollbar.render(area, buf, &mut self.vertical_scroll_state);
 
+        let selected_item_text_color = self.config.selected_list_item;
+        let selected_item_bg = self.config.selected_tab_color;
         if let Ok(playlist_names) = self.backend.PlayListManager.list_playlists() {
             self.max_len = playlist_names.len();
             let view_items: Vec<ListItem> = playlist_names
@@ -270,8 +290,18 @@ impl ListPlaylist {
                     let is_selected = i == self.selected;
                     let style = if is_selected {
                         self.selected_playlist_name = Some(item.clone());
+                        Style::default()
+                            .fg(Color::Rgb(
+                                selected_item_text_color.0,
+                                selected_item_text_color.1,
+                                selected_item_text_color.0,
+                            ))
+                            .bg(Color::Rgb(
+                                selected_item_bg.0,
+                                selected_item_bg.1,
+                                selected_item_bg.2,
+                            ))
                         // Highlight selected item
-                        Style::default().fg(Color::Yellow).bg(Color::Blue)
                     } else {
                         Style::default()
                     };
@@ -286,7 +316,7 @@ impl ListPlaylist {
                 // Render the list
                 List::new(view_items)
                     .block(Block::default().borders(Borders::ALL))
-                    .highlight_symbol("▶"),
+                    .highlight_symbol(&self.config.selected_item_char),
                 area,
                 buf,
                 &mut list_state,
@@ -309,6 +339,7 @@ struct ViewPlayList {
     offset: usize,
     max_page: Arc<Mutex<Option<usize>>>,
     tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+    config :  Rc<USERCONFIG>,
 }
 
 impl ViewPlayList {
@@ -316,6 +347,7 @@ impl ViewPlayList {
         rx: mpsc::Receiver<String>,
         backend: Arc<Backend>,
         tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+        config :  Rc<USERCONFIG>
     ) -> Self {
         Self {
             rx,
@@ -329,6 +361,7 @@ impl ViewPlayList {
             offset: 0,
             max_page: Arc::new(Mutex::new(None)),
             tx_playlist,
+            config,
         }
     }
     fn handle_keystrokes(&mut self, key: KeyEvent) {
@@ -445,6 +478,8 @@ impl ViewPlayList {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"));
+        let selected_item_text_color = self.config.selected_list_item;
+        let selected_item_bg = self.config.selected_tab_color;
         if let Ok(item) = self.content.lock() {
             if let Some(r) = item.clone() {
                 self.max_len = r.len();
@@ -457,7 +492,17 @@ impl ViewPlayList {
                     .map(|(i, (song))| {
                         // Format results
                         let style = if i == self.selected {
-                            Style::default().fg(Color::Yellow).bg(Color::Blue)
+  Style::default()
+                            .fg(Color::Rgb(
+                                selected_item_text_color.0,
+                                selected_item_text_color.1,
+                                selected_item_text_color.0,
+                            ))
+                            .bg(Color::Rgb(
+                                selected_item_bg.0,
+                                selected_item_bg.1,
+                                selected_item_bg.2,
+                            ))
                         } else {
                             Style::default()
                         };
@@ -471,7 +516,7 @@ impl ViewPlayList {
                     // Render results list
                     List::new(items)
                         .block(Block::default().title("Results").borders(Borders::ALL))
-                        .highlight_symbol("▶"),
+                        .highlight_symbol(&self.config.selected_item_char),
                     area,
                     buf,
                     &mut list_state,

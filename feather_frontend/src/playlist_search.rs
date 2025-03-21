@@ -21,6 +21,7 @@ use ratatui::widgets::ListItem;
 use ratatui::widgets::ListState;
 use ratatui::widgets::Scrollbar;
 use ratatui::widgets::ScrollbarState;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
@@ -29,6 +30,8 @@ use tokio::time::sleep;
 use tui_textarea::TextArea;
 
 use crate::backend::Backend;
+use crate::config;
+use crate::config::USERCONFIG;
 #[derive(PartialEq, PartialOrd)]
 enum PlayListSearchState {
     Search,
@@ -42,11 +45,15 @@ pub struct PlayListSearch<'a> {
 }
 
 impl<'a> PlayListSearch<'a> {
-    pub fn new(backend: Arc<Backend>, tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>) -> Self {
+    pub fn new(
+        backend: Arc<Backend>,
+        tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+        config: Rc<USERCONFIG>,
+    ) -> Self {
         let (tx_id, rx_id) = mpsc::channel(32);
         Self {
-            search: PlayListSearchComponent::new(backend.clone(), tx_id),
-            view: SeletectPlayListView::new(rx_id, backend, tx_playlist),
+            search: PlayListSearchComponent::new(backend.clone(), tx_id, config.clone()),
+            view: SeletectPlayListView::new(rx_id, backend, tx_playlist, config),
             state: PlayListSearchState::Search,
         }
     }
@@ -103,10 +110,11 @@ struct PlayListSearchComponent<'a> {
     max_len: Option<usize>,
     selected_id: Option<String>,
     tx_id: mpsc::Sender<String>,
+    config: Rc<USERCONFIG>,
 }
 
 impl<'a> PlayListSearchComponent<'a> {
-    fn new(backend: Arc<Backend>, tx_id: mpsc::Sender<String>) -> Self {
+    fn new(backend: Arc<Backend>, tx_id: mpsc::Sender<String>, config: Rc<USERCONFIG>) -> Self {
         let (tx, rx) = mpsc::channel(32);
         Self {
             textarea: TextArea::default(),
@@ -122,6 +130,7 @@ impl<'a> PlayListSearchComponent<'a> {
             max_len: None,
             selected_id: None,
             tx_id,
+            config,
         }
     }
     fn change_state(&mut self) {
@@ -234,6 +243,8 @@ impl<'a> PlayListSearchComponent<'a> {
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"));
         vertical_scrollbar.render(results_area, buf, &mut self.verticle_scrollbar);
+        let selected_item_bg = self.config.selected_tab_color;
+        let selected_item_text_color = self.config.selected_list_item;
 
         // Render search results if available
         if self.display_content {
@@ -247,7 +258,17 @@ impl<'a> PlayListSearchComponent<'a> {
                             // Format results
                             let style = if i == self.selected {
                                 self.selected_id = Some(songid);
-                                Style::default().fg(Color::Yellow).bg(Color::Blue)
+                                Style::default()
+                                    .fg(Color::Rgb(
+                                        selected_item_text_color.0,
+                                        selected_item_text_color.1,
+                                        selected_item_text_color.0,
+                                    ))
+                                    .bg(Color::Rgb(
+                                        selected_item_bg.0,
+                                        selected_item_bg.1,
+                                        selected_item_bg.2,
+                                    ))
                             } else {
                                 Style::default()
                             };
@@ -262,7 +283,7 @@ impl<'a> PlayListSearchComponent<'a> {
                         // Render results list
                         List::new(items)
                             .block(Block::default().title("Results").borders(Borders::ALL))
-                            .highlight_symbol("▶"),
+                            .highlight_symbol(&self.config.selected_item_char),
                         results_area,
                         buf,
                         &mut list_state,
@@ -286,6 +307,7 @@ struct SeletectPlayListView {
     offset: usize,
     max_page: Arc<Mutex<Option<usize>>>,
     tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+    config: Rc<USERCONFIG>,
 }
 
 impl SeletectPlayListView {
@@ -293,6 +315,7 @@ impl SeletectPlayListView {
         rx_id: mpsc::Receiver<String>,
         backend: Arc<Backend>,
         tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
+        config: Rc<USERCONFIG>,
     ) -> Self {
         Self {
             rx_id,
@@ -305,50 +328,69 @@ impl SeletectPlayListView {
             offset: 0,
             max_page: Arc::new(Mutex::new(None)),
             tx_playlist,
+            config,
         }
     }
 
     fn handle_keystrokes(&mut self, key: KeyEvent) {
-    match key.code {
-        KeyCode::Char('p') => {
-            let db = self.db.clone();
-            let backend = self.backend.clone();
-            tokio::spawn(async move {
-                // Extract the SongDatabase before awaiting
-                let db_inner = {
-                    let db_guard = db.lock().expect("Failed to lock db");
-                    db_guard.clone() // Clone the Option<SongDatabase>
-                };
-                
-                if let Some(db_inner) = db_inner {
-                    backend.play_playlist(db_inner, 0).await;
-                }
-            });
-        }
-        KeyCode::Enter => {
-            let db = self.db.clone();
-            let backend = self.backend.clone();
-            let select= self.selected;
-            tokio::spawn(async move {
-                // Extract the SongDatabase before awaiting
-                let db_inner = {
-                    let db_guard = db.lock().expect("Failed to lock db");
-                    db_guard.clone() // Clone the Option<SongDatabase>
-                };
-                
-                if let Some(db_inner) = db_inner {
-                    backend.play_playlist(db_inner, select).await;
-                }
-            });
+        match key.code {
+            KeyCode::Char('p') => {
+                let db = self.db.clone();
+                let backend = self.backend.clone();
+                tokio::spawn(async move {
+                    // Extract the SongDatabase before awaiting
+                    let db_inner = {
+                        let db_guard = db.lock().expect("Failed to lock db");
+                        db_guard.clone() // Clone the Option<SongDatabase>
+                    };
 
+                    if let Some(db_inner) = db_inner {
+                        backend.play_playlist(db_inner, 0).await;
+                    }
+                });
+            }
+            KeyCode::Enter => {
+                let db = self.db.clone();
+                let backend = self.backend.clone();
+                let select = self.selected;
+                tokio::spawn(async move {
+                    // Extract the SongDatabase before awaiting
+                    let db_inner = {
+                        let db_guard = db.lock().expect("Failed to lock db");
+                        db_guard.clone() // Clone the Option<SongDatabase>
+                    };
 
-        }
-        KeyCode::Right => {
-            if let Ok(db) = self.db.lock() {
-                if let Some(db) = db.clone() {
-                    if let Ok(max_page) = self.max_page.lock() {
-                        let total_pages = max_page.unwrap_or(0);
-                        let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
+                    if let Some(db_inner) = db_inner {
+                        backend.play_playlist(db_inner, select).await;
+                    }
+                });
+            }
+            KeyCode::Right => {
+                if let Ok(db) = self.db.lock() {
+                    if let Some(db) = db.clone() {
+                        if let Ok(max_page) = self.max_page.lock() {
+                            let total_pages = max_page.unwrap_or(0);
+                            let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
+
+                            if new_offset != self.offset {
+                                if let Ok(iter_db) = db.next_page(new_offset) {
+                                    let new_vec: Vec<Song> = iter_db.into_iter().collect();
+                                    if !new_vec.is_empty() {
+                                        if let Ok(mut content) = self.content.lock() {
+                                            *content = Some(new_vec);
+                                            self.offset = new_offset;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            KeyCode::Left => {
+                if let Ok(db) = self.db.lock() {
+                    if let Some(db) = db.clone() {
+                        let new_offset = self.offset.saturating_sub(PAGE_SIZE);
 
                         if new_offset != self.offset {
                             if let Ok(iter_db) = db.next_page(new_offset) {
@@ -364,40 +406,20 @@ impl SeletectPlayListView {
                     }
                 }
             }
-        }
-        KeyCode::Left => {
-            if let Ok(db) = self.db.lock() {
-                if let Some(db) = db.clone() {
-                    let new_offset = self.offset.saturating_sub(PAGE_SIZE);
-
-                    if new_offset != self.offset {
-                        if let Ok(iter_db) = db.next_page(new_offset) {
-                            let new_vec: Vec<Song> = iter_db.into_iter().collect();
-                            if !new_vec.is_empty() {
-                                if let Ok(mut content) = self.content.lock() {
-                                    *content = Some(new_vec);
-                                    self.offset = new_offset;
-                                }
-                            }
-                        }
-                    }
-                }
+            KeyCode::Char('j') | KeyCode::Down => {
+                // Move selection down
+                self.selected = self.selected.saturating_add(1);
+                self.selected = self.selected.min(self.max_len - 1);
+                self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
             }
+            KeyCode::Char('k') | KeyCode::Up => {
+                // Move selection up
+                self.selected = self.selected.saturating_sub(1);
+                self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
+            }
+            _ => (),
         }
-        KeyCode::Char('j') | KeyCode::Down => {
-            // Move selection down
-            self.selected = self.selected.saturating_add(1);
-            self.selected = self.selected.min(self.max_len - 1);
-            self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            // Move selection up
-            self.selected = self.selected.saturating_sub(1);
-            self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
-        }
-        _ => (),
     }
-}
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         if let Ok(id) = self.rx_id.try_recv() {
@@ -418,7 +440,8 @@ impl SeletectPlayListView {
                             let value = ((s.len() + page_size - 1) / page_size) * page_size;
                             *l = Some(value);
                         }
-                        let mut db_temp = SongDatabase::new("userplaylist").expect("Failed to Form a Db");
+                        let mut db_temp =
+                            SongDatabase::new("userplaylist").expect("Failed to Form a Db");
                         for i in s {
                             let title = i.0.0;
                             let id = i.0.1;
@@ -447,6 +470,8 @@ impl SeletectPlayListView {
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"));
 
+        let selected_item_bg = self.config.selected_tab_color;
+        let selected_item_text_color = self.config.selected_list_item;
         if let Ok(item) = self.content.lock() {
             if let Some(r) = item.clone() {
                 self.max_len = r.len();
@@ -459,7 +484,17 @@ impl SeletectPlayListView {
                     .map(|(i, (song))| {
                         // Format results
                         let style = if i == self.selected {
-                            Style::default().fg(Color::Yellow).bg(Color::Blue)
+                            Style::default()
+                                .fg(Color::Rgb(
+                                    selected_item_text_color.0,
+                                    selected_item_text_color.1,
+                                    selected_item_text_color.0,
+                                ))
+                                .bg(Color::Rgb(
+                                    selected_item_bg.0,
+                                    selected_item_bg.1,
+                                    selected_item_bg.2,
+                                ))
                         } else {
                             Style::default()
                         };
@@ -473,7 +508,7 @@ impl SeletectPlayListView {
                     // Render results list
                     List::new(items)
                         .block(Block::default().title("Results").borders(Borders::ALL))
-                        .highlight_symbol("▶"),
+                        .highlight_symbol(&self.config.selected_item_char),
                     area,
                     buf,
                     &mut list_state,

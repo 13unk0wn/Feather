@@ -26,6 +26,7 @@ use ratatui::{
 };
 use std::arch::x86_64::_mm256_castpd256_pd128;
 use std::fs::OpenOptions;
+use std::rc::Rc;
 use std::{env, sync::Arc};
 use tokio::{
     sync::mpsc,
@@ -72,7 +73,7 @@ struct App<'a> {
     top_bar: TopBar,
     player: SongPlayer,
     status_bar: StatusBar,
-    user_config: USERCONFIG,
+    user_config: Rc<USERCONFIG>,
     // backend: Arc<Backend>,
     help_mode: bool,
     exit: bool,
@@ -91,25 +92,33 @@ impl App<'_> {
         let backend = Arc::new(
             Backend::new(history.clone(), get_cookies, tx.clone(), tx_playlist_off).unwrap(),
         );
-        let search = Search::new(backend.clone());
-        let playlist_search = PlayListSearch::new(backend.clone(), tx_playlist.clone());
+        let config = Rc::new(USERCONFIG::new().unwrap()); // unwrap because application should not be able to run without valid config
+        let search = Search::new(backend.clone(), config.clone());
+        let playlist_search =
+            PlayListSearch::new(backend.clone(), tx_playlist.clone(), config.clone());
 
         App {
-            user_config: USERCONFIG::new().unwrap(), // unwrap because application should not be able to run without valid config
             state: State::Home,
             search: SearchMain::new(search, playlist_search),
-            userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone()),
-            history: History::new(history, backend.clone()),
+            userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone(), config.clone()),
+            history: History::new(history, backend.clone(), config.clone()),
             help: Help::new(),
             home: Home::new(),
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
-            player: SongPlayer::new(backend.clone(), rx, rx_playlist, rx_playlist_off),
+            player: SongPlayer::new(
+                backend.clone(),
+                rx,
+                rx_playlist,
+                rx_playlist_off,
+                config.clone(),
+            ),
             // backend,
             help_mode: false,
             exit: false,
             status_bar: StatusBar::new(),
             prev_state: None,
+            user_config: config,
         }
     }
 
@@ -195,11 +204,15 @@ impl App<'_> {
                         ])
                         .split(area);
 
-                    self.top_bar
-                        .render(layout[0], frame.buffer_mut(), &self.state);
 
                     // Background for the whole UI
                     frame.render_widget(Block::default().style(global_style), area);
+                    self.top_bar.render(
+                        layout[0],
+                        frame.buffer_mut(),
+                        &self.state,
+                        &self.user_config,
+                    );
 
                     if !self.help_mode {
                         match self.state {
@@ -256,7 +269,7 @@ impl TopBar {
     fn new() -> Self {
         Self
     }
-    fn render(&mut self, mut area: Rect, buf: &mut Buffer, state: &State) {
+    fn render(&mut self, mut area: Rect, buf: &mut Buffer, state: &State, config: &USERCONFIG) {
         let titles = ["Home", "Search", "History", "UserPlaylist"];
 
         // Add top padding by shifting the area down
@@ -266,7 +279,11 @@ impl TopBar {
 
         // Define colors
         let normal_style = Style::default().fg(Color::White);
-        let selected_style = Style::default().fg(Color::Rgb(255, 255, 150)); // Light yellow
+        let selected_style = Style::default().fg(Color::Rgb(
+            config.selected_mode_text_color.0,
+            config.selected_mode_text_color.1,
+            config.selected_mode_text_color.2,
+        )); // Light yellow
 
         let mut spans = vec![];
 

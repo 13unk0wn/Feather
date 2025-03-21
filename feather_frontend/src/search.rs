@@ -1,5 +1,6 @@
 #![allow(unused)]
 use crate::backend::Backend;
+use crate::config::USERCONFIG;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::{ArtistName, SongId, SongName};
@@ -21,6 +22,7 @@ use ratatui::{
         StatefulWidget, Widget,
     },
 };
+use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use tokio::{
@@ -52,11 +54,12 @@ pub struct Search<'a> {
     popup: PopUpAddPlaylist,
     tx_song: mpsc::Sender<Song>,
     rx_signal: mpsc::Receiver<bool>,
+    config: Rc<USERCONFIG>,
 }
 
 impl Search<'_> {
     // Constructor initializing the Search struct
-    pub fn new(backend: Arc<Backend>) -> Self {
+    pub fn new(backend: Arc<Backend>, config: Rc<USERCONFIG>) -> Self {
         let (tx, rx) = mpsc::channel(32); // Create channel for async search results
         let (tx_song, rx_song) = mpsc::channel(8);
         let (tx_signal, rx_signal) = mpsc::channel(1);
@@ -75,9 +78,10 @@ impl Search<'_> {
             selected_song: None,
             max_len: None,
             tx_song,
-            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal),
+            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal,config.clone()),
             popup_appear,
             rx_signal,
+            config,
         }
     }
 
@@ -211,6 +215,8 @@ impl Search<'_> {
             .set_placeholder_text("Search Song or Playlist");
         self.textarea.set_block(search_block);
         self.textarea.render(searchbar_area, buf);
+        let selected_item_text_color = self.config.selected_list_item;
+        let selected_item_bg = self.config.selected_tab_color;
 
         // Render search results if available
         if self.display_content {
@@ -225,7 +231,17 @@ impl Search<'_> {
                             let style = if i == self.selected {
                                 self.selected_song =
                                     Some(Song::new(songid.clone(), song.clone(), artists.clone()));
-                                Style::default().fg(Color::Yellow).bg(Color::Blue)
+                                Style::default()
+                                    .fg(Color::Rgb(
+                                        selected_item_text_color.0,
+                                        selected_item_text_color.1,
+                                        selected_item_text_color.0,
+                                    ))
+                                    .bg(Color::Rgb(
+                                        selected_item_bg.0,
+                                        selected_item_bg.1,
+                                        selected_item_bg.2,
+                                    ))
                             } else {
                                 Style::default()
                             };
@@ -240,7 +256,7 @@ impl Search<'_> {
                         // Render results list
                         List::new(items)
                             .block(Block::default().title("Results").borders(Borders::ALL))
-                            .highlight_symbol("▶"),
+                            .highlight_symbol(&self.config.selected_item_char),
                         results_area,
                         buf,
                         &mut list_state,

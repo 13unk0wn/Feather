@@ -12,10 +12,11 @@ pub struct USERCONFIG {
     pub play_icon: String,
     pub pause_icon: String,
     pub selected_list_item: (u8, u8, u8),
-    pub selected_item_char: char,
+    pub selected_item_char: String,
     pub selected_tab_color: (u8, u8, u8),
     pub player_progress_bar_color: (u8, u8, u8),
     pub player_volume_bar_color: (u8, u8, u8),
+    pub selected_mode_text_color: (u8, u8, u8),
 }
 
 #[derive(Error, Debug)]
@@ -29,15 +30,16 @@ pub enum USERCONFIGERROR {
 impl Default for USERCONFIG {
     fn default() -> Self {
         Self {
-            bg_color: (0, 0, 0),         // Black
-            text_color: (255, 255, 255), // White
+            bg_color: (29, 32, 33),
+            text_color: (235, 219, 178),
             play_icon: "▶".to_string(),
             pause_icon: "❚❚".to_string(),
-            selected_list_item: (50, 50, 50), // Dark gray
-            selected_item_char: '>',
-            selected_tab_color: (100, 100, 255),    // Blueish
-            player_progress_bar_color: (200, 0, 0), // Red
-            player_volume_bar_color: (0, 200, 0),   // Green
+            selected_list_item: (60, 56, 54),
+            selected_item_char: '>'.to_string(),
+            selected_tab_color: (250, 189, 47),
+            player_progress_bar_color: (214, 93, 14),
+            player_volume_bar_color: (152, 151, 26),
+            selected_mode_text_color: (152, 151, 26),
         }
     }
 }

@@ -1,5 +1,7 @@
 #![allow(unused)]
+use std::rc::Rc;
 use crate::backend::Backend;
+use crate::config::USERCONFIG;
 use crate::playlist_search;
 use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -19,8 +21,6 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task;
 
-const PLAY: &str = "▶";
-const PAUSE: &str = "❚❚";
 
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
 enum SongState {
@@ -47,6 +47,7 @@ pub struct SongPlayer {
     rx: mpsc::Receiver<bool>,         // Receiver to listen for playback events
     is_playlist: Arc<Mutex<bool>>,
     rx_playlist_off: mpsc::Receiver<bool>,
+    config :  Rc<USERCONFIG>,
 }
 
 impl SongPlayer {
@@ -55,6 +56,7 @@ impl SongPlayer {
         rx: mpsc::Receiver<bool>,
         _rx_playlist: mpsc::Receiver<Arc<Mutex<SongDatabase>>>,
         rx_playlist_off: mpsc::Receiver<bool>,
+        config  : Rc<USERCONFIG>,
     ) -> Self {
         let player = Self {
             backend,
@@ -63,6 +65,7 @@ impl SongPlayer {
             rx,
             is_playlist: Arc::new(Mutex::new(false)),
             rx_playlist_off,
+            config
         };
         player.observe_time(); // Start observing playback time
         player.observe_song_end(); // Start observing song end for playlists
@@ -308,6 +311,7 @@ impl SongPlayer {
         let mut volume = 0;
         let mut text = vec![Line::from("")];
         let mut pause = false;
+        let progress_bar_color =  self.config.player_progress_bar_color;
 
         if let Ok(state) = self.songstate.lock() {
             text = match *state {
@@ -374,7 +378,7 @@ impl SongPlayer {
 
                         let gauge = Gauge::default()
                             .block(block)
-                            .gauge_style(Style::default().fg(Color::White))
+                            .gauge_style(Style::default().fg(Color::Rgb(progress_bar_color.0, progress_bar_color.1, progress_bar_color.2)))
                             .ratio(percentage)
                             .label(Span::styled(label_text, Style::default().fg(Color::Blue)));
 
@@ -402,10 +406,11 @@ impl SongPlayer {
 
         let inner_block = block.inner(chunks[0]);
         block.render(chunks[0], buf);
-        let icon = if pause { PAUSE } else { PLAY };
+        let icon = if pause { self.config.pause_icon.clone() } else { self.config.play_icon.clone() };
         let mut text = Paragraph::new(icon)
             .alignment(Alignment::Center)
             .render(inner_block, buf);
+        let volume_color  =  self.config.player_volume_bar_color;
         let block = Block::default()
             .borders(Borders::ALL)
             .title("Volume")
@@ -413,8 +418,8 @@ impl SongPlayer {
             .border_type(BorderType::Rounded);
         let gauge = Gauge::default()
             .block(block)
-            .gauge_style(Style::default().fg(Color::White))
-            .ratio((volume as f64) / 100.0)
+            .gauge_style(Style::default().fg(Color::Rgb(volume_color.0,volume_color.1,volume_color.2)))
+            .ratio(((volume as f64) / 100.0).min(1.0))
             .label(Span::styled(
                 format!("{}", volume),
                 Style::default().fg(Color::Blue),

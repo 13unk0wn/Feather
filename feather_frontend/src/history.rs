@@ -1,5 +1,7 @@
 #![allow(unused)]
 use crate::backend::Backend;
+use crate::config;
+use crate::config::USERCONFIG;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::database::HistoryDB;
@@ -11,6 +13,7 @@ use ratatui::widgets::{
     Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarState,
     StatefulWidget, Widget,
 };
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -26,11 +29,12 @@ pub struct History {
     popup_appear: bool,
     popup: PopUpAddPlaylist,
     rx_signal : mpsc::Receiver<bool>,
+    config  : Rc<USERCONFIG>,
 }
 
 impl History {
     // Constructor initializing the History struct
-    pub fn new(history: Arc<HistoryDB>, backend: Arc<Backend>) -> Self {
+    pub fn new(history: Arc<HistoryDB>, backend: Arc<Backend>,config  : Rc<USERCONFIG>) -> Self {
         let (tx_song, rx_song) = mpsc::channel(8);
         let (tx_signal, rx_signal) = mpsc::channel(1);
         Self {
@@ -42,8 +46,9 @@ impl History {
             backend: backend.clone(),
             tx_song,
             popup_appear: false,
-            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal),
+            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal,config.clone()),
             rx_signal,
+            config,
         }
     }
 
@@ -120,6 +125,8 @@ impl History {
             .end_symbol(Some("↓"));
         scrollbar.render(history_area, buf, &mut self.vertical_scroll_state);
 
+        let selected_item_text_color = self.config.selected_list_item;
+        let selected_item_bg = self.config.selected_tab_color; 
         // Fetch and render history items
         if let Ok(items) = self.history.get_history() {
             self.max_len = items.len();
@@ -140,7 +147,7 @@ impl History {
                     }
                     let style = if is_selected {
                         // Highlight selected item
-                        Style::default().fg(Color::Yellow).bg(Color::Blue)
+                                Style::default().fg(Color::Rgb(selected_item_text_color.0, selected_item_text_color.1, selected_item_text_color.0)).bg(Color::Rgb(selected_item_bg.0, selected_item_bg.1, selected_item_bg.2))
                     } else {
                         Style::default()
                     };
@@ -155,7 +162,7 @@ impl History {
                 // Render the list
                 List::new(view_items)
                     .block(Block::default().borders(Borders::ALL))
-                    .highlight_symbol("▶"),
+                    .highlight_symbol(&self.config.selected_item_char),
                 history_area,
                 buf,
                 &mut list_state,
