@@ -393,7 +393,7 @@ impl PlaylistManager {
         &self,
         playlist_name: &str,
     ) -> Result<SongDatabase, PlaylistManagerError> {
-        let mut song_playlist = SongDatabase::new(playlist_name)?;
+        let mut song_playlist = SongDatabase::new("load_playlist")?;
 
         let get_playlist = self.get_playlist(playlist_name)?;
 

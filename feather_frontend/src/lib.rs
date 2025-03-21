@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod config;
+pub mod delete_userplaylist;
 pub mod help;
 pub mod history;
 pub mod home;

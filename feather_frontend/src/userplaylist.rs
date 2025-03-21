@@ -67,9 +67,9 @@ impl<'a> UserPlayList<'a> {
         Self {
             backend: backend.clone(),
             list_playlist: ListPlaylist::new(backend.clone(), tx_playlist, config.clone()),
-            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play,config.clone()),
+            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play, config.clone()),
             state,
-            new_playlist: NewPlayList::new(backend, popup.clone(), tx,config),
+            new_playlist: NewPlayList::new(backend, popup.clone(), tx, config),
             popup: popup,
             rx,
         }
@@ -139,11 +139,16 @@ struct NewPlayList<'a> {
     popup: Arc<Mutex<bool>>,
     backend: Arc<Backend>,
     tx: mpsc::Sender<bool>,
-    config  : Rc<USERCONFIG>,
+    config: Rc<USERCONFIG>,
 }
 
 impl<'a> NewPlayList<'a> {
-    pub fn new(backend: Arc<Backend>, popup: Arc<Mutex<bool>>, tx: mpsc::Sender<bool>,config  : Rc<USERCONFIG>) -> Self {
+    pub fn new(
+        backend: Arc<Backend>,
+        popup: Arc<Mutex<bool>>,
+        tx: mpsc::Sender<bool>,
+        config: Rc<USERCONFIG>,
+    ) -> Self {
         Self {
             textarea: TextArea::default(),
             playlistname: String::new(),
@@ -339,7 +344,7 @@ struct ViewPlayList {
     offset: usize,
     max_page: Arc<Mutex<Option<usize>>>,
     tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
-    config :  Rc<USERCONFIG>,
+    config: Rc<USERCONFIG>,
 }
 
 impl ViewPlayList {
@@ -347,7 +352,7 @@ impl ViewPlayList {
         rx: mpsc::Receiver<String>,
         backend: Arc<Backend>,
         tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
-        config :  Rc<USERCONFIG>
+        config: Rc<USERCONFIG>,
     ) -> Self {
         Self {
             rx,
@@ -398,6 +403,7 @@ impl ViewPlayList {
                 });
             }
             KeyCode::Right => {
+                debug!("Calling next Page");
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
                         if let Ok(max_page) = self.max_page.lock() {
@@ -405,11 +411,13 @@ impl ViewPlayList {
                             let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
 
                             if new_offset != self.offset {
+                                debug!("Calling next Page 2 ");
                                 if let Ok(iter_db) = db.next_page(new_offset) {
                                     let new_vec: Vec<Song> = iter_db.into_iter().collect();
                                     if !new_vec.is_empty() {
                                         if let Ok(mut content) = self.content.lock() {
                                             *content = Some(new_vec);
+                                            debug!("Changed  content");
                                             self.offset = new_offset;
                                         }
                                     }
@@ -457,6 +465,12 @@ impl ViewPlayList {
         if let Ok(name) = self.rx.try_recv() {
             self.playlist_name = Some(name.clone());
             if let Ok(playlist) = self.backend.PlayListManager.convert_playlist(&name) {
+                let page_size =  PAGE_SIZE;
+                let len_clone = self.max_page.clone();
+                if let Ok(mut l) = len_clone.lock() {
+                    let value = ((playlist.db.len() + page_size - 1) / page_size) * page_size;
+                    *l = Some(value);
+                }
                 if let Ok(mut db) = self.db.lock() {
                     *db = Some(playlist);
                 }
@@ -464,6 +478,8 @@ impl ViewPlayList {
             if let Ok(playlist) = self.db.lock() {
                 if let Some(p) = playlist.clone() {
                     drop(playlist);
+                    self.offset = 0;
+                    self.selected = 0;
                     if let Ok(songs) = p.next_page(self.offset) {
                         if let Ok(mut songs_list) = self.content.lock() {
                             if songs.len() > 0 {
@@ -492,17 +508,17 @@ impl ViewPlayList {
                     .map(|(i, (song))| {
                         // Format results
                         let style = if i == self.selected {
-  Style::default()
-                            .fg(Color::Rgb(
-                                selected_item_text_color.0,
-                                selected_item_text_color.1,
-                                selected_item_text_color.0,
-                            ))
-                            .bg(Color::Rgb(
-                                selected_item_bg.0,
-                                selected_item_bg.1,
-                                selected_item_bg.2,
-                            ))
+                            Style::default()
+                                .fg(Color::Rgb(
+                                    selected_item_text_color.0,
+                                    selected_item_text_color.1,
+                                    selected_item_text_color.0,
+                                ))
+                                .bg(Color::Rgb(
+                                    selected_item_bg.0,
+                                    selected_item_bg.1,
+                                    selected_item_bg.2,
+                                ))
                         } else {
                             Style::default()
                         };
