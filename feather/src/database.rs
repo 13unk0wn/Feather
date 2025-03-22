@@ -142,7 +142,7 @@ impl HistoryDB {
 
     /// Retrieves up to 50 history entries, sorted by most recent first.
     pub fn get_history(&self) -> Result<Vec<HistoryEntry>, HistoryError> {
-        let mut history = Vec::with_capacity(self.db.len().min(50)); // Pre-allocate vector
+        let mut history = Vec::with_capacity(self.db.len()); // Pre-allocate vector
         for item in self.db.iter().take(50) {
             let (_, value) = item?;
             if let Ok(entry) = bincode::deserialize::<HistoryEntry>(&value) {
@@ -270,7 +270,7 @@ impl SongDatabase {
             title,
             artist_name,
         };
-        let key = format!("song:{}", self.current_index);
+        let key = format!("{}", self.current_index);
         let value = serde_json::to_vec(&song)?;
         self.db.insert(key, value)?;
         self.current_index += 1;
@@ -278,7 +278,7 @@ impl SongDatabase {
     }
 
     pub fn get_song_by_index(&self, index: usize) -> Result<Song, SongError> {
-        let key = format!("song:{}", index); // Format the key as you did in `add_song`
+        let key = format!("{}", index); // Format the key as you did in `add_song`
         if let Some(value) = self.db.get(key)? {
             let song: Song = serde_json::from_slice(&value)?;
             Ok(song)
@@ -288,41 +288,33 @@ impl SongDatabase {
     }
     //TODO :  Change the logic it  is not working
     pub fn next_page(&self, offset: usize) -> Result<Vec<Song>, SongError> {
-        let mut songs: Vec<Song> = self
+        let mut songs_with_index: Vec<(usize, Song)> = self
             .db
             .iter()
             .filter_map(|res| match res {
-                Ok((key, v)) => {
-                    // Convert the Vec<u8> key to a string
-                    let key_str = String::from_utf8_lossy(&key).to_string();
+                Ok((key, value)) => {
+                    // Convert key from Vec<u8> to string and parse it as usize
+                    let key_str = String::from_utf8_lossy(&key);
+                    let index: usize = key_str.parse().unwrap_or(usize::MAX); // Use MAX as fallback for invalid keys
 
-                    // Derive current_index from the key (e.g., "song:123")
-                    let current_index: usize = key_str
-                        .strip_prefix("song:")
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or_default();
-
-                    // Deserialize the song data from the value
-                    serde_json::from_slice(&v)
-                        .map(|song: Song| (current_index, song))
+                    // Deserialize the song
+                    serde_json::from_slice(&value)
+                        .map(|song: Song| (index, song))
                         .ok()
                 }
                 Err(_) => None,
             })
-            .filter(|&(current_index, _)| {
-                current_index >= offset && current_index < offset + PAGE_SIZE
-            })
-            .map(|(_, song)| song)
             .collect();
 
-        // Sort the songs based on the extracted `current_index`
-        songs.sort_by_key(|s| {
-            let key = format!(
-                "song:{}",
-                self.db.iter().position(|item| item.is_ok()).unwrap_or(0)
-            );
-            key
-        });
+        // Sort by index to ensure correct order
+        songs_with_index.sort_by_key(|&(index, _)| index);
+
+        // Filter and take the songs for the current page
+        let songs: Vec<Song> = songs_with_index
+            .into_iter()
+            .filter(|&(index, _)| index >= offset && index < offset + PAGE_SIZE)
+            .map(|(_, song)| song)
+            .collect();
 
         Ok(songs)
     }
