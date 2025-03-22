@@ -11,6 +11,7 @@ pub mod search;
 pub mod search_main;
 pub mod statusbar;
 pub mod userplaylist;
+pub mod error;
 
 /// Enum representing different states of the application.
 #[derive(Debug, Copy, Clone, PartialEq)]

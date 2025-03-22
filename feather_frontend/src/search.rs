@@ -1,6 +1,7 @@
 #![allow(unused)]
 use crate::backend::Backend;
 use crate::config::USERCONFIG;
+use crate::error::ErrorPopUp;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
 use feather::{ArtistName, SongId, SongName};
@@ -55,6 +56,8 @@ pub struct Search<'a> {
     tx_song: mpsc::Sender<Song>,
     rx_signal: mpsc::Receiver<bool>,
     config: Rc<USERCONFIG>,
+    error: Arc<ErrorPopUp>,
+    // error_message_test: usize,
 }
 
 impl Search<'_> {
@@ -63,6 +66,7 @@ impl Search<'_> {
         let (tx, rx) = mpsc::channel(32); // Create channel for async search results
         let (tx_song, rx_song) = mpsc::channel(8);
         let (tx_signal, rx_signal) = mpsc::channel(1);
+        let config_arc = Arc::new((*config).clone());
         let popup_appear = false;
         Self {
             query: String::new(),
@@ -78,10 +82,12 @@ impl Search<'_> {
             selected_song: None,
             max_len: None,
             tx_song,
-            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal,config.clone()),
+            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal, config.clone()),
             popup_appear,
             rx_signal,
+            error: Arc::new(ErrorPopUp::new(config_arc)),
             config,
+            // error_message_test: 0,
         }
     }
 
@@ -161,8 +167,12 @@ impl Search<'_> {
                         // Play selected song
                         if let Some(song) = self.selected_song.clone() {
                             let backend = self.backend.clone();
+                            let error = self.error.clone();
                             tokio::spawn(async move {
-                                let _ = backend.play_music(song, false).await.is_ok();
+                                if let Err(e) = backend.play_music(song, false).await {
+                                    error.show_error(e.to_string());
+                                }
+
                                 // let _ = tx_player.send(true).await;
                             });
                         }
@@ -198,6 +208,8 @@ impl Search<'_> {
             if let Ok(result) = response {
                 self.results = Ok(Some(result));
             } else if let Err(e) = response {
+                self.error
+                    .show_error("Error while Searching Songs".to_string());
                 self.results = Err(e);
             }
             self.display_content = true;
@@ -265,7 +277,16 @@ impl Search<'_> {
             }
         }
 
+        let error_area = Rect { x: area.x + area.width / 4, y: area.y + area.height / 4, width: area.width / 4, height: area.height / 4 };
+
+
+       
+        // if self.error_message_test == 10{
+        //     self.error.show_error("Test Error".to_string());
+        // }
+        // self.error_message_test+=1;
         // Render outer border
+        self.error.render(error_area, buf);
         let outer_block = Block::default().borders(Borders::ALL);
         outer_block.render(area, buf);
         if self.popup_appear {

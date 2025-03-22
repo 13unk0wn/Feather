@@ -55,6 +55,8 @@ pub enum BackendError {
     UserPlayListError(#[from] PlaylistManagerError),
 }
 
+//Error  current_index is not updating 
+// when song is switching on autoplay
 impl Backend {
     /// Creates a new `Backend` instance.
     pub  fn new(

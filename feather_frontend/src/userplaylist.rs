@@ -36,6 +36,7 @@ use tui_textarea::TextArea;
 use crate::backend::Backend;
 use crate::config;
 use crate::config::USERCONFIG;
+use crate::error::ErrorPopUp;
 
 #[derive(PartialEq)]
 enum State {
@@ -52,6 +53,7 @@ pub struct UserPlayList<'a> {
     popup: Arc<Mutex<bool>>,
     viewplaylist: ViewPlayList,
     rx: mpsc::Receiver<bool>,
+    error: Arc<ErrorPopUp>,
 }
 
 impl<'a> UserPlayList<'a> {
@@ -64,14 +66,17 @@ impl<'a> UserPlayList<'a> {
         let (tx_playlist, rx_playlist) = mpsc::channel(32);
         let popup = Arc::new(Mutex::new(false));
         let state = State::AllPlayList;
+        let config_arc = Arc::new((*config).clone());
+        let error = Arc::new(ErrorPopUp::new(config_arc));
         Self {
             backend: backend.clone(),
             list_playlist: ListPlaylist::new(backend.clone(), tx_playlist, config.clone()),
-            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play, config.clone()),
+            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play, config.clone(),error.clone()),
             state,
-            new_playlist: NewPlayList::new(backend, popup.clone(), tx, config),
+            new_playlist: NewPlayList::new(backend, popup.clone(), tx, config, error.clone()),
             popup: popup,
             rx,
+            error,
         }
     }
 
@@ -117,6 +122,14 @@ impl<'a> UserPlayList<'a> {
             self.state = State::AllPlayList;
         }
 
+        let error_area = Rect {
+            x: area.x + area.width / 4,
+            y: area.y + area.height / 4,
+            width: area.width / 4,
+            height: area.height / 4,
+        };
+        self.error.render(error_area, buf);
+
         if let Ok(value) = self.popup.try_lock() {
             if *value {
                 drop(value);
@@ -140,6 +153,7 @@ struct NewPlayList<'a> {
     backend: Arc<Backend>,
     tx: mpsc::Sender<bool>,
     config: Rc<USERCONFIG>,
+    error: Arc<ErrorPopUp>,
 }
 
 impl<'a> NewPlayList<'a> {
@@ -148,6 +162,7 @@ impl<'a> NewPlayList<'a> {
         popup: Arc<Mutex<bool>>,
         tx: mpsc::Sender<bool>,
         config: Rc<USERCONFIG>,
+        error: Arc<ErrorPopUp>,
     ) -> Self {
         Self {
             textarea: TextArea::default(),
@@ -156,6 +171,7 @@ impl<'a> NewPlayList<'a> {
             popup: popup,
             tx,
             config,
+            error,
         }
     }
 
@@ -174,21 +190,28 @@ impl<'a> NewPlayList<'a> {
                 let lines = self.textarea.lines()[0].trim();
                 if !lines.is_empty() {
                     self.playlistname = lines.to_owned();
-                    if self
+                    match self
                         .backend
                         .PlayListManager
                         .create_playlist(&self.playlistname)
-                        .is_ok()
                     {
-                        if let Ok(mut popup) = self.popup.lock() {
-                            *popup = false;
+                        Ok(_) => {
+                            if let Ok(mut popup) = self.popup.lock() {
+                                *popup = false;
+                            }
+                            let tx = self.tx.clone();
+                            self.textarea.select_all();
+                            self.textarea.cut();
+                            tokio::spawn(async move {
+                                tx.send(true).await;
+                            });
                         }
-                        let tx = self.tx.clone();
-                        self.textarea.select_all();
-                        self.textarea.cut();
-                        tokio::spawn(async move {
-                            tx.send(true).await;
-                        });
+                        Err(e) => {
+                            if let Ok(mut popup) = self.popup.lock() {
+                                *popup = false;
+                            }
+                            self.error.show_error(e.to_string());
+                        }
                     }
                 }
             }
@@ -345,6 +368,7 @@ struct ViewPlayList {
     max_page: Arc<Mutex<Option<usize>>>,
     tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
     config: Rc<USERCONFIG>,
+    error  : Arc<ErrorPopUp>,
 }
 
 impl ViewPlayList {
@@ -353,6 +377,7 @@ impl ViewPlayList {
         backend: Arc<Backend>,
         tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
         config: Rc<USERCONFIG>,
+        error  : Arc<ErrorPopUp>,
     ) -> Self {
         Self {
             rx,
@@ -367,6 +392,7 @@ impl ViewPlayList {
             max_page: Arc::new(Mutex::new(None)),
             tx_playlist,
             config,
+            error,
         }
     }
     fn handle_keystrokes(&mut self, key: KeyEvent) {
@@ -403,7 +429,6 @@ impl ViewPlayList {
                 });
             }
             KeyCode::Right => {
-                debug!("Calling next Page");
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
                         if let Ok(max_page) = self.max_page.lock() {
@@ -411,13 +436,11 @@ impl ViewPlayList {
                             let new_offset = (self.offset + PAGE_SIZE).min(total_pages);
 
                             if new_offset != self.offset {
-                                debug!("Calling next Page 2 ");
                                 if let Ok(iter_db) = db.next_page(new_offset) {
                                     let new_vec: Vec<Song> = iter_db.into_iter().collect();
                                     if !new_vec.is_empty() {
                                         if let Ok(mut content) = self.content.lock() {
                                             *content = Some(new_vec);
-                                            debug!("Changed  content");
                                             self.offset = new_offset;
                                         }
                                     }
@@ -465,7 +488,7 @@ impl ViewPlayList {
         if let Ok(name) = self.rx.try_recv() {
             self.playlist_name = Some(name.clone());
             if let Ok(playlist) = self.backend.PlayListManager.convert_playlist(&name) {
-                let page_size =  PAGE_SIZE;
+                let page_size = PAGE_SIZE;
                 let len_clone = self.max_page.clone();
                 if let Ok(mut l) = len_clone.lock() {
                     let value = ((playlist.db.len() + page_size - 1) / page_size) * page_size;

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct USERCONFIG {
     pub bg_color: (u8, u8, u8),
     pub text_color: (u8, u8, u8),
