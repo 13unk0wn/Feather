@@ -36,6 +36,8 @@ use tui_textarea::TextArea;
 use crate::backend::Backend;
 use crate::config;
 use crate::config::USERCONFIG;
+use crate::delete_userplaylist;
+use crate::delete_userplaylist::DeleteUserPlaylistPopUp;
 use crate::error::ErrorPopUp;
 
 #[derive(PartialEq)]
@@ -71,7 +73,13 @@ impl<'a> UserPlayList<'a> {
         Self {
             backend: backend.clone(),
             list_playlist: ListPlaylist::new(backend.clone(), tx_playlist, config.clone()),
-            viewplaylist: ViewPlayList::new(rx_playlist, backend.clone(), tx_play, config.clone(),error.clone()),
+            viewplaylist: ViewPlayList::new(
+                rx_playlist,
+                backend.clone(),
+                tx_play,
+                config.clone(),
+                error.clone(),
+            ),
             state,
             new_playlist: NewPlayList::new(backend, popup.clone(), tx, config, error.clone()),
             popup: popup,
@@ -249,10 +257,13 @@ struct ListPlaylist {
     selected_playlist_name: Option<String>,
     tx: mpsc::Sender<String>,
     config: Rc<USERCONFIG>,
+    delete_playlist: DeleteUserPlaylistPopUp,
 }
 
 impl ListPlaylist {
     fn new(backend: Arc<Backend>, tx: mpsc::Sender<String>, config: Rc<USERCONFIG>) -> Self {
+        let config_clone = config.clone();
+        let backend_clone = backend.clone();
         ListPlaylist {
             backend,
             selected: 0,
@@ -261,28 +272,38 @@ impl ListPlaylist {
             selected_playlist_name: None,
             tx,
             config,
+            delete_playlist: DeleteUserPlaylistPopUp::new(config_clone, backend_clone),
         }
     }
 
     pub fn handle_keystrokes(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Enter => {
-                if let Some(playlist_name) = self.selected_playlist_name.clone() {
-                    let tx = self.tx.clone();
-                    tokio::spawn(async move {
-                        tx.send(playlist_name).await;
-                    });
+        if let Some(_) = &self.delete_playlist.playlist_name {
+            self.delete_playlist.handle_keystokes(key);
+        } else {
+            match key.code {
+                KeyCode::Enter => {
+                    if let Some(playlist_name) = self.selected_playlist_name.clone() {
+                        let tx = self.tx.clone();
+                        tokio::spawn(async move {
+                            tx.send(playlist_name).await;
+                        });
+                    }
                 }
+                KeyCode::Char('d') => {
+                    debug!("{:?}", self.selected_playlist_name.clone());
+                    debug!("{:?}", "Set");
+                    self.delete_playlist.playlist_name = self.selected_playlist_name.clone();
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    // Move selection down
+                    self.select_next();
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    // Move selection up
+                    self.select_previous();
+                }
+                _ => (),
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                // Move selection down
-                self.select_next();
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                // Move selection up
-                self.select_previous();
-            }
-            _ => (),
         }
     }
 
@@ -350,6 +371,10 @@ impl ListPlaylist {
                 &mut list_state,
             );
         }
+        debug!("{:?}", self.delete_playlist.playlist_name);
+        if let Some(_) = &self.delete_playlist.playlist_name {
+            self.delete_playlist.render(area, buf);
+        }
         let outer_block = Block::default().borders(Borders::ALL);
         outer_block.render(area, buf);
     }
@@ -368,7 +393,7 @@ struct ViewPlayList {
     max_page: Arc<Mutex<Option<usize>>>,
     tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
     config: Rc<USERCONFIG>,
-    error  : Arc<ErrorPopUp>,
+    error: Arc<ErrorPopUp>,
 }
 
 impl ViewPlayList {
@@ -377,7 +402,7 @@ impl ViewPlayList {
         backend: Arc<Backend>,
         tx_playlist: mpsc::Sender<Arc<Mutex<SongDatabase>>>,
         config: Rc<USERCONFIG>,
-        error  : Arc<ErrorPopUp>,
+        error: Arc<ErrorPopUp>,
     ) -> Self {
         Self {
             rx,

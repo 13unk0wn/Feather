@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+
 use crate::config::USERCONFIG;
 
 pub struct ErrorPopUp {
@@ -25,6 +26,7 @@ impl ErrorPopUp {
             config,
         }
     }
+
 
     pub fn show_error(&self, msg: String) {
         let error_message = Arc::clone(&self.error_message);

@@ -4,6 +4,7 @@ use crate::config;
 use crate::config::USERCONFIG;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
+use feather::database::HISTORY_PAGE_SIZE;
 use feather::database::HistoryDB;
 use feather::database::Song;
 use ratatui::prelude::{Buffer, Color, Constraint, Layout, Rect};
@@ -15,6 +16,7 @@ use ratatui::widgets::{
 };
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::mpsc;
 
 // Defines a struct to manage playback history UI
@@ -28,13 +30,14 @@ pub struct History {
     tx_song: mpsc::Sender<Song>,
     popup_appear: bool,
     popup: PopUpAddPlaylist,
-    rx_signal : mpsc::Receiver<bool>,
-    config  : Rc<USERCONFIG>,
+    rx_signal: mpsc::Receiver<bool>,
+    config: Rc<USERCONFIG>,
+    offset: usize,
 }
 
 impl History {
     // Constructor initializing the History struct
-    pub fn new(history: Arc<HistoryDB>, backend: Arc<Backend>,config  : Rc<USERCONFIG>) -> Self {
+    pub fn new(history: Arc<HistoryDB>, backend: Arc<Backend>, config: Rc<USERCONFIG>) -> Self {
         let (tx_song, rx_song) = mpsc::channel(8);
         let (tx_signal, rx_signal) = mpsc::channel(1);
         Self {
@@ -46,9 +49,10 @@ impl History {
             backend: backend.clone(),
             tx_song,
             popup_appear: false,
-            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal,config.clone()),
+            popup: PopUpAddPlaylist::new(backend, rx_song, tx_signal, config.clone()),
             rx_signal,
             config,
+            offset: 0,
         }
     }
 
@@ -61,6 +65,16 @@ impl History {
         }
         if value {
             match key.code {
+                KeyCode::Right => {
+                    if self.backend.history.db.len() >= self.offset + HISTORY_PAGE_SIZE {
+                        self.offset += HISTORY_PAGE_SIZE;
+                        self.selected = 0;
+                    }
+                }
+                KeyCode::Left => {
+                    self.selected = 0;
+                    self.offset = self.offset.saturating_sub(HISTORY_PAGE_SIZE);
+                }
                 KeyCode::Char('a') => {
                     if let Some(song) = self.selected_song.clone() {
                         let tx = self.tx_song.clone();
@@ -126,9 +140,12 @@ impl History {
         scrollbar.render(history_area, buf, &mut self.vertical_scroll_state);
 
         let selected_item_text_color = self.config.selected_list_item;
-        let selected_item_bg = self.config.selected_tab_color; 
+        let selected_item_bg = self.config.selected_tab_color;
         // Fetch and render history items
-        if let Ok(items) = self.history.get_history() {
+        if let Ok(items) = self.history.get_history(self.offset) {
+            if items.len() == 0{
+                self.offset = self.offset.saturating_sub(HISTORY_PAGE_SIZE);
+            }
             self.max_len = items.len();
             self.vertical_scroll_state = self.vertical_scroll_state.content_length(self.max_len);
 
@@ -147,7 +164,17 @@ impl History {
                     }
                     let style = if is_selected {
                         // Highlight selected item
-                                Style::default().fg(Color::Rgb(selected_item_text_color.0, selected_item_text_color.1, selected_item_text_color.0)).bg(Color::Rgb(selected_item_bg.0, selected_item_bg.1, selected_item_bg.2))
+                        Style::default()
+                            .fg(Color::Rgb(
+                                selected_item_text_color.0,
+                                selected_item_text_color.1,
+                                selected_item_text_color.0,
+                            ))
+                            .bg(Color::Rgb(
+                                selected_item_bg.0,
+                                selected_item_bg.1,
+                                selected_item_bg.2,
+                            ))
                     } else {
                         Style::default()
                     };

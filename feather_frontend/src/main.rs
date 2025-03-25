@@ -49,7 +49,8 @@ async fn main() -> Result<()> {
         .open("app.log")
         .unwrap();
 
-    // Initialize the logger
+
+     // Initialize the logger
     simplelog::WriteLogger::init(
         simplelog::LevelFilter::Debug,
         simplelog::Config::default(),

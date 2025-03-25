@@ -16,8 +16,6 @@ use tokio::sync::mpsc;
 
 use thiserror::Error;
 
-/// The `Backend` struct manages the YouTube client, music player, and history database.
-/// It also tracks the currently playing song.
 pub struct Backend {
     pub yt: YoutubeClient,         // YouTube client for fetching song URLs
     pub player: Player,            // Music player instance

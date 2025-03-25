@@ -29,6 +29,7 @@ pub struct HistoryEntry {
     pub play_count: u64,
 }
 
+pub const HISTORY_PAGE_SIZE: usize = 20;
 impl HistoryEntry {
     /// Creates a new history entry with the current timestamp.
     pub fn new(
@@ -49,7 +50,7 @@ impl HistoryEntry {
 
 /// Database handler for managing song history.
 pub struct HistoryDB {
-    db: Db, // Sled database instance
+    pub db: Db, // Sled database instance
 }
 
 /// Represents possible errors that can occur in history operations.
@@ -141,16 +142,24 @@ impl HistoryDB {
     }
 
     /// Retrieves up to 50 history entries, sorted by most recent first.
-    pub fn get_history(&self) -> Result<Vec<HistoryEntry>, HistoryError> {
-        let mut history = Vec::with_capacity(self.db.len()); // Pre-allocate vector
-        for item in self.db.iter().take(50) {
+    pub fn get_history(&self, offset: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let mut history = Vec::new();
+        for item in self.db.iter() {
             let (_, value) = item?;
             if let Ok(entry) = bincode::deserialize::<HistoryEntry>(&value) {
                 history.push(entry);
             }
         }
-        history.sort_unstable_by(|e1, e2| e2.time_stamp.cmp(&e1.time_stamp)); // Sort by timestamp descending
-        Ok(history)
+
+        // Sort by timestamp in descending order
+        history.sort_unstable_by(|e1, e2| e2.time_stamp.cmp(&e1.time_stamp));
+
+        // Apply offset and take the required number of entries
+        Ok(history
+            .into_iter()
+            .skip(offset)
+            .take(HISTORY_PAGE_SIZE)
+            .collect())
     }
 
     /// Deletes a specific history entry by song ID.

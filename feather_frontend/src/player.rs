@@ -379,7 +379,7 @@ impl SongPlayer {
                         let gauge = Gauge::default()
                             .block(block)
                             .gauge_style(Style::default().fg(Color::Rgb(progress_bar_color.0, progress_bar_color.1, progress_bar_color.2)))
-                            .ratio(percentage)
+                            .ratio(percentage.min(1.0))
                             .label(Span::styled(label_text, Style::default().fg(Color::Blue)));
 
                         gauge.render(chunks[1], buf);
