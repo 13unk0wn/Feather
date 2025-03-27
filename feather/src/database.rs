@@ -15,6 +15,7 @@ use serde_json::json;
 use sled::Db;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use sys_info::hostname;
 use thiserror::Error;
 
 const MIGRATION_KEY: &str = "DONE";
@@ -496,23 +497,70 @@ impl PlaylistManager {
     }
 }
 
-// #[derive(Serialize, Deserialize, Debug)]
-// struct UserProfile {
-//     name: String,
-//     ascii_image: String,
-//     uptime: u64,
-//     last_played: String,
-//     total_songs_played: u64,
-// }
-// impl UserProfile {
-//     fn new(name: String, ascii_image: String, uptime: u64) -> Self {
-//         UserProfile { name, ascii_image,last_played  :  };
-//         unimplemented!()
-//     }
-// }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserProfile {
+    pub name: String,
+    pub last_played: Option<Song>,
+    pub songs_played: usize,
+    pub time_played: usize,
+}
 
-struct UserProfileDb {
+impl Default for UserProfile {
+    fn default() -> Self {
+        Self {
+            name: hostname().unwrap_or("username".to_string()),
+            last_played: None,
+            songs_played: 0,
+            time_played: 0,
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum UserProfileError {
+    #[error("Database error: {0}")]
+    DbError(#[from] sled::Error),
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] bincode::Error),
+}
+
+pub struct UserProfileDb {
     db: sled::Db,
+}
+
+impl UserProfileDb {
+    pub fn new() -> Result<Self, UserProfileError> {
+        let db = sled::open("user_profile")?;
+        if db.get("user")?.is_none() {
+            db.insert("user", bincode::serialize(&UserProfile::default())?);
+        }
+        Ok(Self { db })
+    }
+
+    pub fn add_time(&self) -> Result<(), UserProfileError> {
+        let user = self.db.get("user")?.unwrap();
+        let mut user_data: UserProfile = bincode::deserialize(&user)?;
+
+        user_data.time_played += 1;
+        let new_data = bincode::serialize(&user_data)?;
+        self.db.insert("user", new_data)?;
+        Ok(())
+    }
+    pub fn set_last_played(&self, song: Song) -> Result<(), UserProfileError> {
+        let user = self.db.get("user")?.unwrap();
+        let mut user_data: UserProfile = bincode::deserialize(&user)?;
+
+        user_data.last_played = Some(song);
+        let new_data = bincode::serialize(&user_data)?;
+        self.db.insert("user", new_data)?;
+        Ok(())
+    }
+
+    pub fn give_info(&self) -> Result<UserProfile, UserProfileError> {
+        let user = self.db.get("user")?.unwrap();
+        let mut user_data: UserProfile = bincode::deserialize(&user)?;
+        Ok(user_data)
+    }
 }
 
 // // Tests unchanged...

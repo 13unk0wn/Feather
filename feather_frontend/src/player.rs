@@ -68,8 +68,27 @@ impl SongPlayer {
             config
         };
         player.observe_time(); // Start observing playback time
+        player.add_time();
         player.observe_song_end(); // Start observing song end for playlists
         player
+    }
+
+    fn add_time(&self) {
+      let backend = self.backend.clone();
+
+
+      tokio::task::spawn(async move {
+        loop{
+        if backend
+          .player.is_playing().unwrap_or(false) {
+            debug!("Adding time");
+            backend.user_profile.add_time();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+          }else{
+            debug!("not adding time");
+          }
+    }
+      });
     }
 
     fn observe_time(&self) {

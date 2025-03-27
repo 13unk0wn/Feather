@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
-use feather::database::PlaylistManager;
+use feather::database::UserProfileError;
+use feather::database::{PlaylistManager, UserProfileDb};
 use feather::database::{PlaylistManagerError, SongError};
 use feather::{
     ArtistName, SongId, SongName,
@@ -26,35 +27,38 @@ pub struct Backend {
     current_index_playlist: Arc<Mutex<usize>>,
     pub PlayListManager: Arc<PlaylistManager>,
     tx_playlist_off : mpsc::Sender<bool>,
+    pub user_profile  : Arc<UserProfileDb>,
 }
-
 /// Defines possible errors that can occur in the `Backend`.
 #[derive(Error, Debug)]
 pub enum BackendError {
     #[error("Player error: {0}")]
-    Mpv(#[from] MpvError), // Error related to the music player
+  Mpv(#[from] MpvError),  // Error related to the music player
 
     #[error("Failed to fetch YouTube URL")]
-    YoutubeFetch(String), // Error when fetching a song URL from YouTube
+  YoutubeFetch(String),  // Error when fetching a song URL from YouTube
 
     #[error("Mutex poisoned: {0}")]
-    MutexPoisoned(String), // Error when accessing a poisoned mutex
+  MutexPoisoned(String),  // Error when accessing a poisoned mutex
 
     #[error("History database error: {0}")]
-    HistoryError(String), // Error related to history database operations
+  HistoryError(String),  // Error related to history database operations
 
     #[error("Playback error: {0}")]
-    PlaybackError(String), // Error related to playback issues
+  PlaybackError(String),  // Error related to playback issues
 
     #[error("Playlist error : {0}")]
-    PlaylistError(#[from] SongError),
+  PlaylistError(#[from] SongError),
 
     #[error("UserPlayListError : {0}")]
-    UserPlayListError(#[from] PlaylistManagerError),
+  UserPlayListError(#[from] PlaylistManagerError),
+
+    #[error("UserProfile Error")]
+  UserProfileError(#[from] UserProfileError)
 }
 
-//Error  current_index is not updating 
-// when song is switching on autoplay
+// Error  current_index is not updating
+//  when song is switching on autoplay
 impl Backend {
     /// Creates a new `Backend` instance.
     pub  fn new(
@@ -73,6 +77,7 @@ impl Backend {
             tx,
             PlayListManager: Arc::new(PlaylistManager::new()?),
             tx_playlist_off,
+            user_profile  : Arc::new(UserProfileDb::new()?),
         })
     }
 
@@ -112,7 +117,7 @@ impl Backend {
                 .expect("Failed to lock index");
             *i = index;
         }
-    }
+}
 
     /// Advances to the next song in the playlist.
     pub async fn next_song_playlist(&self) {
@@ -189,11 +194,12 @@ impl Backend {
 
         // Add to history
         self.history
-            .add_entry(&HistoryEntry::from(song))
+            .add_entry(&HistoryEntry::from(song.clone()))
             .map_err(|e| BackendError::HistoryError(e.to_string()))?;
 
         self.loop_player(!playlist_song)?;
         self.tx.send(playlist_song).await;
+        self.user_profile.set_last_played(song);
 
         Ok(())
     }

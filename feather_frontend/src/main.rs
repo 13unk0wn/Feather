@@ -104,7 +104,7 @@ impl App<'_> {
             userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone(), config.clone()),
             history: History::new(history, backend.clone(), config.clone()),
             help: Help::new(),
-            home: Home::new(),
+            home: Home::new(backend.clone()),
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
             player: SongPlayer::new(
@@ -222,6 +222,9 @@ impl App<'_> {
                             State::UserPlaylist => {
                                 self.userplaylist.render(layout[1], frame.buffer_mut())
                             }
+                            State::Home => {
+                                self.home.render(layout[1], frame.buffer_mut());
+                            }
                             State::SongPlayer => {
                                 if let Some(prev) = self.prev_state {
                                     match prev {
@@ -233,6 +236,9 @@ impl App<'_> {
                                         }
                                         State::UserPlaylist => {
                                             self.userplaylist.render(layout[1], frame.buffer_mut());
+                                        }
+                                        State::Home => {
+                                            self.home.render(layout[1], frame.buffer_mut());
                                         }
                                         _ => (),
                                     }
