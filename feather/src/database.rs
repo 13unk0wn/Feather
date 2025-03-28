@@ -29,6 +29,26 @@ pub struct HistoryEntry {
     time_stamp: u64,                  // Timestamp when the song was played
     pub play_count: u64,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct oldHistoryEntry {
+    pub song_name: SongName,          // Name of the song
+    pub song_id: SongId,              // Unique identifier for the song
+    pub artist_name: Vec<ArtistName>, // List of artists associated with the song
+    time_stamp: u64,
+}
+
+impl oldHistoryEntry {
+    fn convert(self) -> HistoryEntry {
+        HistoryEntry {
+            song_name: self.song_name,
+            song_id: self.song_id,
+            artist_name: self.artist_name,
+            time_stamp: self.time_stamp,
+            play_count: 1,
+        }
+    }
+}
 pub const FAVOURITE_SONGS_SIZE: usize = 5;
 pub const HISTORY_PAGE_SIZE: usize = 20;
 impl HistoryEntry {
@@ -90,7 +110,7 @@ impl HistoryDB {
         let mut history_entries = Vec::new();
         for item in self.db.iter() {
             let (_, value) = item?;
-            if let Ok(entry) = bincode::deserialize::<HistoryEntry>(&value) {
+            if let Ok(entry) = bincode::deserialize::<oldHistoryEntry>(&value) {
                 history_entries.push(entry);
             }
         }
@@ -109,12 +129,10 @@ impl HistoryDB {
         self.backup_history()?;
         for item in self.db.iter() {
             let (key, value) = item?;
-            if let Ok(mut entry) = bincode::deserialize::<HistoryEntry>(&value) {
-                if entry.play_count == 0 {
-                    entry.play_count = 1; // Default to 1 if missing
-                    let new_value = bincode::serialize(&entry)?;
-                    self.db.insert(key, new_value)?; // Update database
-                }
+            if let Ok(mut entry) = bincode::deserialize::<oldHistoryEntry>(&value) {
+                let new_entry = entry.convert();
+                let new_entry = bincode::serialize(&new_entry)?;
+                self.db.insert(key, new_entry)?;
             }
         }
         self.db.insert(MIGRATION_KEY, b"true")?;
