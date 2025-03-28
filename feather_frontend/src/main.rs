@@ -42,21 +42,20 @@ use std::io::Write;
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
 
-    // Set up the logger to write to a file
-    let log_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("app.log")
-        .unwrap();
+    // // Set up the logger to write to a file
+    // let log_file = OpenOptions::new()
+    //     .create(true)
+    //     .append(true)
+    //     .open("app.log")
+    //     .unwrap();
 
-
-     // Initialize the logger
-    simplelog::WriteLogger::init(
-        simplelog::LevelFilter::Debug,
-        simplelog::Config::default(),
-        log_file,
-    )
-    .unwrap();
+    //  // Initialize the logger
+    // simplelog::WriteLogger::init(
+    //     simplelog::LevelFilter::Debug,
+    //     simplelog::Config::default(),
+    //     log_file,
+    // )
+    // .unwrap();
 
     let terminal = ratatui::init();
     let _app = App::new().render(terminal).await;
@@ -104,7 +103,7 @@ impl App<'_> {
             userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone(), config.clone()),
             history: History::new(history, backend.clone(), config.clone()),
             help: Help::new(),
-            home: Home::new(backend.clone()),
+            home: Home::new(backend.clone(), config.clone()),
             // current_playling_playlist: CurrentPlayingPlaylist {},
             top_bar: TopBar::new(),
             player: SongPlayer::new(
@@ -170,6 +169,7 @@ impl App<'_> {
             State::History => match key.code {
                 _ => self.history.handle_keystrokes(key),
             },
+            State::Home => self.home.handle_keywords(key),
             State::SongPlayer => match key.code {
                 _ => self.player.handle_keystrokes(key),
             },
@@ -204,7 +204,6 @@ impl App<'_> {
                             Constraint::Length(2),
                         ])
                         .split(area);
-
 
                     // Background for the whole UI
                     frame.render_widget(Block::default().style(global_style), area);

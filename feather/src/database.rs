@@ -1,6 +1,6 @@
 #![allow(unused)]
-use crate::yt::YoutubeClient;
 use crate::PlaylistName;
+use crate::yt::YoutubeClient;
 use log::debug;
 use log::log;
 use std::fs;
@@ -29,7 +29,7 @@ pub struct HistoryEntry {
     time_stamp: u64,                  // Timestamp when the song was played
     pub play_count: u64,
 }
-
+pub const FAVOURITE_SONGS_SIZE: usize = 5;
 pub const HISTORY_PAGE_SIZE: usize = 20;
 impl HistoryEntry {
     /// Creates a new history entry with the current timestamp.
@@ -161,6 +161,22 @@ impl HistoryDB {
             .skip(offset)
             .take(HISTORY_PAGE_SIZE)
             .collect())
+    }
+    /// most played  5 songs.
+    pub fn most_played(&self) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let mut history = Vec::new();
+        for item in self.db.iter() {
+            let (_, value) = item?;
+            if let Ok(entry) = bincode::deserialize::<HistoryEntry>(&value) {
+                history.push(entry);
+            }
+        }
+
+        // Sort by timestamp in descending order
+        history.sort_unstable_by(|e1, e2| e2.play_count.cmp(&e1.play_count));
+
+        // Apply offset and take the required number of entries
+        Ok(history.into_iter().take(FAVOURITE_SONGS_SIZE).collect())
     }
 
     /// Deletes a specific history entry by song ID.
@@ -530,7 +546,9 @@ pub struct UserProfileDb {
 
 impl UserProfileDb {
     pub fn new() -> Result<Self, UserProfileError> {
-        let db = sled::open("user_profile")?;
+        let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        path.push("Feather/user_profile");
+        let db = sled::open(path)?;
         if db.get("user")?.is_none() {
             db.insert("user", bincode::serialize(&UserProfile::default())?);
         }
@@ -541,7 +559,11 @@ impl UserProfileDb {
         let user = self.db.get("user")?.unwrap();
         let mut user_data: UserProfile = bincode::deserialize(&user)?;
 
+        debug!("{:?}", user_data);
+
         user_data.time_played += 1;
+
+        debug!("{:?}", user_data);
         let new_data = bincode::serialize(&user_data)?;
         self.db.insert("user", new_data)?;
         Ok(())
@@ -551,6 +573,16 @@ impl UserProfileDb {
         let mut user_data: UserProfile = bincode::deserialize(&user)?;
 
         user_data.last_played = Some(song);
+        let new_data = bincode::serialize(&user_data)?;
+        self.db.insert("user", new_data)?;
+        Ok(())
+    }
+
+    pub fn add_song(&self) -> Result<(), UserProfileError> {
+        let user = self.db.get("user")?.unwrap();
+        let mut user_data: UserProfile = bincode::deserialize(&user)?;
+
+        user_data.songs_played += 1;
         let new_data = bincode::serialize(&user_data)?;
         self.db.insert("user", new_data)?;
         Ok(())

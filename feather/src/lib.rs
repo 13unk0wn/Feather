@@ -1,5 +1,6 @@
 pub mod database;
 pub mod player;
+pub mod update;
 pub mod yt;
 
 /// Input/Return Types

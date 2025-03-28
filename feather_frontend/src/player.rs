@@ -1,5 +1,4 @@
 #![allow(unused)]
-use std::rc::Rc;
 use crate::backend::Backend;
 use crate::config::USERCONFIG;
 use crate::playlist_search;
@@ -16,11 +15,11 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::widgets::{BorderType, Gauge};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task;
-
 
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
 enum SongState {
@@ -47,7 +46,7 @@ pub struct SongPlayer {
     rx: mpsc::Receiver<bool>,         // Receiver to listen for playback events
     is_playlist: Arc<Mutex<bool>>,
     rx_playlist_off: mpsc::Receiver<bool>,
-    config :  Rc<USERCONFIG>,
+    config: Rc<USERCONFIG>,
 }
 
 impl SongPlayer {
@@ -56,7 +55,7 @@ impl SongPlayer {
         rx: mpsc::Receiver<bool>,
         _rx_playlist: mpsc::Receiver<Arc<Mutex<SongDatabase>>>,
         rx_playlist_off: mpsc::Receiver<bool>,
-        config  : Rc<USERCONFIG>,
+        config: Rc<USERCONFIG>,
     ) -> Self {
         let player = Self {
             backend,
@@ -65,7 +64,7 @@ impl SongPlayer {
             rx,
             is_playlist: Arc::new(Mutex::new(false)),
             rx_playlist_off,
-            config
+            config,
         };
         player.observe_time(); // Start observing playback time
         player.add_time();
@@ -74,21 +73,19 @@ impl SongPlayer {
     }
 
     fn add_time(&self) {
-      let backend = self.backend.clone();
+        let backend = self.backend.clone();
 
-
-      tokio::task::spawn(async move {
-        loop{
-        if backend
-          .player.is_playing().unwrap_or(false) {
-            debug!("Adding time");
-            backend.user_profile.add_time();
-        tokio::time::sleep(Duration::from_secs(1)).await;
-          }else{
-            debug!("not adding time");
-          }
-    }
-      });
+        tokio::task::spawn(async move {
+            loop {
+                if backend.player.is_playing().unwrap_or(false) {
+                    debug!("Adding time");
+                    backend.user_profile.add_time();
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                } else {
+                    debug!("not adding time");
+                }
+            }
+        });
     }
 
     fn observe_time(&self) {
@@ -330,7 +327,7 @@ impl SongPlayer {
         let mut volume = 0;
         let mut text = vec![Line::from("")];
         let mut pause = false;
-        let progress_bar_color =  self.config.player_progress_bar_color;
+        let progress_bar_color = self.config.player_progress_bar_color;
 
         if let Ok(state) = self.songstate.lock() {
             text = match *state {
@@ -397,7 +394,11 @@ impl SongPlayer {
 
                         let gauge = Gauge::default()
                             .block(block)
-                            .gauge_style(Style::default().fg(Color::Rgb(progress_bar_color.0, progress_bar_color.1, progress_bar_color.2)))
+                            .gauge_style(Style::default().fg(Color::Rgb(
+                                progress_bar_color.0,
+                                progress_bar_color.1,
+                                progress_bar_color.2,
+                            )))
                             .ratio(percentage.min(1.0))
                             .label(Span::styled(label_text, Style::default().fg(Color::Blue)));
 
@@ -425,11 +426,15 @@ impl SongPlayer {
 
         let inner_block = block.inner(chunks[0]);
         block.render(chunks[0], buf);
-        let icon = if pause { self.config.pause_icon.clone() } else { self.config.play_icon.clone() };
+        let icon = if pause {
+            self.config.pause_icon.clone()
+        } else {
+            self.config.play_icon.clone()
+        };
         let mut text = Paragraph::new(icon)
             .alignment(Alignment::Center)
             .render(inner_block, buf);
-        let volume_color  =  self.config.player_volume_bar_color;
+        let volume_color = self.config.player_volume_bar_color;
         let block = Block::default()
             .borders(Borders::ALL)
             .title("Volume")
@@ -437,7 +442,11 @@ impl SongPlayer {
             .border_type(BorderType::Rounded);
         let gauge = Gauge::default()
             .block(block)
-            .gauge_style(Style::default().fg(Color::Rgb(volume_color.0,volume_color.1,volume_color.2)))
+            .gauge_style(Style::default().fg(Color::Rgb(
+                volume_color.0,
+                volume_color.1,
+                volume_color.2,
+            )))
             .ratio(((volume as f64) / 100.0).min(1.0))
             .label(Span::styled(
                 format!("{}", volume),

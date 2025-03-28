@@ -26,46 +26,46 @@ pub struct Backend {
     pub playlist: Arc<Mutex<Option<SongDatabase>>>,
     current_index_playlist: Arc<Mutex<usize>>,
     pub PlayListManager: Arc<PlaylistManager>,
-    tx_playlist_off : mpsc::Sender<bool>,
-    pub user_profile  : Arc<UserProfileDb>,
+    tx_playlist_off: mpsc::Sender<bool>,
+    pub user_profile: Arc<UserProfileDb>,
 }
 /// Defines possible errors that can occur in the `Backend`.
 #[derive(Error, Debug)]
 pub enum BackendError {
     #[error("Player error: {0}")]
-  Mpv(#[from] MpvError),  // Error related to the music player
+    Mpv(#[from] MpvError), // Error related to the music player
 
     #[error("Failed to fetch YouTube URL")]
-  YoutubeFetch(String),  // Error when fetching a song URL from YouTube
+    YoutubeFetch(String), // Error when fetching a song URL from YouTube
 
     #[error("Mutex poisoned: {0}")]
-  MutexPoisoned(String),  // Error when accessing a poisoned mutex
+    MutexPoisoned(String), // Error when accessing a poisoned mutex
 
     #[error("History database error: {0}")]
-  HistoryError(String),  // Error related to history database operations
+    HistoryError(String), // Error related to history database operations
 
     #[error("Playback error: {0}")]
-  PlaybackError(String),  // Error related to playback issues
+    PlaybackError(String), // Error related to playback issues
 
     #[error("Playlist error : {0}")]
-  PlaylistError(#[from] SongError),
+    PlaylistError(#[from] SongError),
 
     #[error("UserPlayListError : {0}")]
-  UserPlayListError(#[from] PlaylistManagerError),
+    UserPlayListError(#[from] PlaylistManagerError),
 
     #[error("UserProfile Error")]
-  UserProfileError(#[from] UserProfileError)
+    UserProfileError(#[from] UserProfileError),
 }
 
 // Error  current_index is not updating
 //  when song is switching on autoplay
 impl Backend {
     /// Creates a new `Backend` instance.
-    pub  fn new(
+    pub fn new(
         history: Arc<HistoryDB>,
         cookies: Option<String>,
         tx: mpsc::Sender<bool>,
-        tx_playlist_off : mpsc::Sender<bool>
+        tx_playlist_off: mpsc::Sender<bool>,
     ) -> Result<Self, BackendError> {
         Ok(Self {
             current_index_playlist: Arc::new(Mutex::new(0)),
@@ -77,7 +77,7 @@ impl Backend {
             tx,
             PlayListManager: Arc::new(PlaylistManager::new()?),
             tx_playlist_off,
-            user_profile  : Arc::new(UserProfileDb::new()?),
+            user_profile: Arc::new(UserProfileDb::new()?),
         })
     }
 
@@ -85,8 +85,8 @@ impl Backend {
         if let Ok(mut playlist) = self.playlist.lock() {
             *playlist = None;
         }
-       self.tx_playlist_off.send(false).await;
-       self.loop_player(true)?;
+        self.tx_playlist_off.send(false).await;
+        self.loop_player(true)?;
         Ok(())
     }
 
@@ -117,7 +117,7 @@ impl Backend {
                 .expect("Failed to lock index");
             *i = index;
         }
-}
+    }
 
     /// Advances to the next song in the playlist.
     pub async fn next_song_playlist(&self) {
@@ -200,6 +200,7 @@ impl Backend {
         self.loop_player(!playlist_song)?;
         self.tx.send(playlist_song).await;
         self.user_profile.set_last_played(song);
+        self.user_profile.add_song();
 
         Ok(())
     }
