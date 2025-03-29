@@ -1,4 +1,4 @@
-#![allow(unused)]
+#![allow(unused, non_camel_case_types)]
 use crate::PlaylistName;
 use crate::yt::YoutubeClient;
 use log::debug;

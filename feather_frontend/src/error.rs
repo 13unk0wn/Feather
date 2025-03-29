@@ -9,8 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-
-use crate::config::USERCONFIG;
+use feather::config::USERCONFIG;
 
 pub struct ErrorPopUp {
     error_message: Arc<Mutex<Option<String>>>,
@@ -26,7 +25,6 @@ impl ErrorPopUp {
             config,
         }
     }
-
 
     pub fn show_error(&self, msg: String) {
         let error_message = Arc::clone(&self.error_message);

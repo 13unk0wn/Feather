@@ -1,9 +1,8 @@
 #![allow(unused)]
 use crate::backend::Backend;
-use crate::config;
-use crate::config::USERCONFIG;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
+use feather::config::USERCONFIG;
 use feather::database::HISTORY_PAGE_SIZE;
 use feather::database::HistoryDB;
 use feather::database::Song;
@@ -143,7 +142,7 @@ impl History {
         let selected_item_bg = self.config.selected_tab_color;
         // Fetch and render history items
         if let Ok(items) = self.history.get_history(self.offset) {
-            if items.len() == 0{
+            if items.len() == 0 {
                 self.offset = self.offset.saturating_sub(HISTORY_PAGE_SIZE);
             }
             self.max_len = items.len();

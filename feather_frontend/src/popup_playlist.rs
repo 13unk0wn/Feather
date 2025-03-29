@@ -1,9 +1,9 @@
 #![allow(unused)]
 use crate::backend::Backend;
-use crate::config::USERCONFIG;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use feather::PlaylistName;
+use feather::config::USERCONFIG;
 use feather::database::Song;
 use ratatui::prelude::Buffer;
 use ratatui::prelude::Rect;
@@ -124,7 +124,7 @@ impl PopUpAddPlaylist {
                 .end_symbol(Some("↓"));
         vertical_scrollbar.render(area, buf, &mut self.vertical_scroll_state);
         let selected_item_text_color = self.config.selected_list_item;
-        let selected_item_bg = self.config.selected_tab_color; 
+        let selected_item_bg = self.config.selected_tab_color;
         if let Ok(playlist_names) = self.backend.PlayListManager.list_playlists() {
             self.max_len = playlist_names.len();
             let view_items: Vec<ListItem> = playlist_names
@@ -136,7 +136,17 @@ impl PopUpAddPlaylist {
                     let style = if is_selected {
                         self.selected_playlist_name = Some(item.clone());
                         // Highlight selected item
-                                Style::default().fg(Color::Rgb(selected_item_text_color.0, selected_item_text_color.1, selected_item_text_color.0)).bg(Color::Rgb(selected_item_bg.0, selected_item_bg.1, selected_item_bg.2))
+                        Style::default()
+                            .fg(Color::Rgb(
+                                selected_item_text_color.0,
+                                selected_item_text_color.1,
+                                selected_item_text_color.0,
+                            ))
+                            .bg(Color::Rgb(
+                                selected_item_bg.0,
+                                selected_item_bg.1,
+                                selected_item_bg.2,
+                            ))
                     } else {
                         Style::default()
                     };

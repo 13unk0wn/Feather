@@ -8,9 +8,9 @@ use ratatui::widgets::Scrollbar;
 use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::StatefulWidget;
 
-use crate::config::USERCONFIG;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use feather::config::USERCONFIG;
 use ratatui::prelude::Widget;
 use ratatui::widgets::ListItem;
 use ratatui::{

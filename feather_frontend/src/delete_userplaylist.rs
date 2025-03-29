@@ -17,8 +17,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::backend::Backend;
-use crate::config::USERCONFIG;
 use feather::PlaylistName;
+use feather::config::USERCONFIG;
 
 #[derive(PartialEq)]
 enum SelectItem {

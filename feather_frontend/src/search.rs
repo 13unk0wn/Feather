@@ -1,9 +1,9 @@
 #![allow(unused)]
 use crate::backend::Backend;
-use crate::config::USERCONFIG;
 use crate::error::ErrorPopUp;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
+use feather::config::USERCONFIG;
 use feather::{ArtistName, SongId, SongName};
 use feather::{PlaylistName, database::Song};
 use log::debug;
@@ -277,10 +277,13 @@ impl Search<'_> {
             }
         }
 
-        let error_area = Rect { x: area.x + area.width / 4, y: area.y + area.height / 4, width: area.width / 4, height: area.height / 4 };
+        let error_area = Rect {
+            x: area.x + area.width / 4,
+            y: area.y + area.height / 4,
+            width: area.width / 4,
+            height: area.height / 4,
+        };
 
-
-       
         // if self.error_message_test == 10{
         //     self.error.show_error("Test Error".to_string());
         // }

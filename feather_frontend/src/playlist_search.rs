@@ -30,8 +30,7 @@ use tokio::time::sleep;
 use tui_textarea::TextArea;
 
 use crate::backend::Backend;
-use crate::config;
-use crate::config::USERCONFIG;
+use feather::config::USERCONFIG;
 #[derive(PartialEq, PartialOrd)]
 enum PlayListSearchState {
     Search,

@@ -1,9 +1,9 @@
 #![allow(unused)]
 use crate::backend::Backend;
-use crate::config::USERCONFIG;
 use crate::playlist_search;
 use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
+use feather::config::USERCONFIG;
 use feather::database::{Song, SongDatabase};
 use log::{debug, error, info};
 use ratatui::layout::{Constraint, Layout};
@@ -110,52 +110,42 @@ impl SongPlayer {
         });
     }
 
-    // Modified observe_song_end without relying on duration
     fn observe_song_end(&self) {
         let backend = Arc::clone(&self.backend);
         let songstate = Arc::clone(&self.songstate);
         let is_playlist = self.is_playlist.clone();
 
         tokio::task::spawn(async move {
-            let mut was_playing = true;
-            let mut idle_count = 0;
-            const MAX_IDLE_COUNT: i32 = 3; // Number of seconds to wait before considering song ended
-
             loop {
                 let mut m_playlist = false;
                 if let Ok(playlist) = is_playlist.lock() {
                     m_playlist = *playlist;
-                    // info!("Is this playlist  :  {playlist}");
                 }
+
                 if m_playlist {
-                    let is_playing = backend.player.is_playing().unwrap_or(false);
+                    let ((current_time), (total_time)) = (
+                        backend.player.get_current_time().parse::<f64>().unwrap(),
+                        backend.player.duration().parse::<f64>().unwrap(),
+                    );
+                    if total_time > 0.0 && (total_time - current_time).abs() < 0.5 {
+                        let should_play_next = if let Ok(state) = songstate.lock() {
+                            *state == SongState::Playing || *state == SongState::Idle
+                        } else {
+                            false
+                        };
 
-                    // info!("{} {}", was_playing, is_playing);
-                    if is_playing {
-                        was_playing = true;
-                        idle_count = 0;
-                    } else if was_playing && !is_playing {
-                        idle_count += 1;
-                        if idle_count >= MAX_IDLE_COUNT {
-                            let should_play_next = if let Ok(state) = songstate.lock() {
-                                *state == SongState::Playing || *state == SongState::Idle
-                            } else {
-                                false
-                            };
-
-                            if should_play_next {
-                                backend.next_song_playlist().await;
-                                was_playing = false; // Reset after playing next song
-                                idle_count = 0;
-                            }
+                        if should_play_next {
+                            backend.next_song_playlist().await;
                         }
                     }
                 }
-                tokio::time::sleep(Duration::from_secs(5)).await; // Check every second
+
+                tokio::time::sleep(Duration::from_secs(1)).await; // Check every second
             }
         });
     }
 
+    // Modified observe_song_end without relying on duration
     fn check_playing(&mut self) {
         let songstate = Arc::clone(&self.songstate);
         let backend = Arc::clone(&self.backend);

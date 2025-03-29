@@ -24,7 +24,6 @@ log = { workspace = true }
 env_logger = { workspace = true }
 simplelog = { workspace = true }
 rascii_art = { workspace = true }
-toml = "0.8.20"
 
 [[bin]]
 name = "feather_frontend"

@@ -34,11 +34,10 @@ use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 
 use crate::backend::Backend;
-use crate::config;
-use crate::config::USERCONFIG;
 use crate::delete_userplaylist;
 use crate::delete_userplaylist::DeleteUserPlaylistPopUp;
 use crate::error::ErrorPopUp;
+use feather::config::USERCONFIG;
 
 #[derive(PartialEq)]
 enum State {

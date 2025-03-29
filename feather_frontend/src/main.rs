@@ -1,8 +1,8 @@
 #![allow(unused)]
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
+use feather::config::USERCONFIG;
 use feather::database::HistoryDB;
-use feather_frontend::config::USERCONFIG;
 use feather_frontend::home::Home;
 use feather_frontend::playlist_search::PlayListSearch;
 use feather_frontend::search_main::SearchMain;
@@ -137,13 +137,6 @@ impl App<'_> {
                                     self.prev_state = Some(self.state);
                                 }
                                 self.state = State::SongPlayer;
-                            }
-                            KeyCode::Char('?') => {
-                                self.help_mode = true;
-                                self.state = State::HelpMode;
-                            }
-                            KeyCode::Char('q') => {
-                                self.exit = true;
                             }
                             _ => {}
                         }
