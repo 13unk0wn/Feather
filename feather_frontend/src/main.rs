@@ -138,6 +138,9 @@ impl App<'_> {
                                 }
                                 self.state = State::SongPlayer;
                             }
+                            KeyCode::Char('q') => {
+                                self.exit = true;
+                            }
                             _ => {}
                         }
                     }
