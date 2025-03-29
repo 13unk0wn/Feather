@@ -73,6 +73,19 @@ struct KeyConfig {
     player: PlayerKeyBindings,
 }
 
+impl Default for KeyConfig {
+    fn default() -> Self {
+        Self {
+            leader: ':',
+            navigation: Navigation::default(),
+            history: HistoryKeyBindings::default(),
+            default: DefaultControl::default(),
+            search: SearchKeyBindings::default(),
+            player: PlayerKeyBindings::default(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Navigation {
     home: char,
@@ -81,6 +94,19 @@ struct Navigation {
     player: char,
     history: char,
     userplaylist: char,
+}
+
+impl Default for Navigation {
+    fn default() -> Self {
+        Self {
+            home: ';',
+            quit: 'q',
+            search: 's',
+            player: 'p',
+            history: 'h',
+            userplaylist: 'u',
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -131,6 +157,18 @@ struct SearchKeyBindings {
     song: SongSearchKeyBinding,
 }
 
+impl Default for SearchKeyBindings {
+    fn default() -> Self {
+        Self {
+            switch: ':',
+            up: None,
+            down: None,
+            playlist: PlaylistKeyBindings::default(),
+            song: SongSearchKeyBinding::default(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct PlaylistKeyBindings {
     switch_mode: char, // Switch Mode b/w ViewPlaylistSearch and SearchPlaylist
@@ -138,11 +176,30 @@ struct PlaylistKeyBindings {
     playlist_search: PlayListSearchKeyBindings,
     view_playlist: PlayListViewKeyBindings,
 }
+
+impl Default for PlaylistKeyBindings {
+    fn default() -> Self {
+        Self {
+            switch_mode: '[',
+            playlist_search: PlayListSearchKeyBindings::default(),
+            view_playlist: PlayListViewKeyBindings::default(),
+        }
+    }
+}
 // USERPLAYLIST WILL ALSO FOLLOW THE SAME KEYBINDINGS
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct PlayListSearchKeyBindings {
-    switch_mode: char, // it switch from playlist_search_box to playlist_view_box
+    switch_mode: Option<char>, // it switch from playlist_search_box to playlist_view_box
     select_playlist: Option<char>,
+}
+
+impl Default for PlayListSearchKeyBindings {
+    fn default() -> Self {
+        Self {
+            switch_mode: None,
+            select_playlist: None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -151,9 +208,24 @@ struct PlayListViewKeyBindings {
     start_from_here: char, // these key is used start song from the selected song
 }
 
+impl Default for PlayListViewKeyBindings {
+    fn default() -> Self {
+        Self {
+            start_playlist: 'p',
+            start_from_here: 'a',
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct SongSearchKeyBinding {
-    switch_mode: char, // switch from song textbox to song search list
+    switch_mode: Option<char>, // switch from song textbox to song search list
+}
+
+impl Default for SongSearchKeyBinding {
+    fn default() -> Self {
+        Self { switch_mode: None }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -165,6 +237,20 @@ struct PlayerKeyBindings {
     playlist_prev_song: char,
     volume_up: char,
     volume_down: char,
+}
+
+impl Default for PlayerKeyBindings {
+    fn default() -> Self {
+        Self {
+            pause: 'p',
+            skip_plus_secs: 'l',
+            skip_minus_secs: 'l',
+            playlist_next_song: 'n',
+            playlist_prev_song: 'p',
+            volume_up: '+',
+            volume_down: '-',
+        }
+    }
 }
 
 impl KeyConfig {}
