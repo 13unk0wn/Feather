@@ -3,7 +3,7 @@ use crate::backend::Backend;
 use crate::playlist_search;
 use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
-use feather::config::USERCONFIG;
+use feather::config::{KeyConfig, USERCONFIG};
 use feather::database::{Song, SongDatabase};
 use log::{debug, error, info};
 use ratatui::layout::{Constraint, Layout};
@@ -47,6 +47,7 @@ pub struct SongPlayer {
     is_playlist: Arc<Mutex<bool>>,
     rx_playlist_off: mpsc::Receiver<bool>,
     config: Rc<USERCONFIG>,
+    key_config: Rc<KeyConfig>,
 }
 
 impl SongPlayer {
@@ -56,6 +57,7 @@ impl SongPlayer {
         _rx_playlist: mpsc::Receiver<Arc<Mutex<SongDatabase>>>,
         rx_playlist_off: mpsc::Receiver<bool>,
         config: Rc<USERCONFIG>,
+        key_config: Rc<KeyConfig>,
     ) -> Self {
         let player = Self {
             backend,
@@ -65,6 +67,7 @@ impl SongPlayer {
             is_playlist: Arc::new(Mutex::new(false)),
             rx_playlist_off,
             config,
+            key_config,
         };
         player.observe_time(); // Start observing playback time
         player.add_time();
@@ -78,11 +81,11 @@ impl SongPlayer {
         tokio::task::spawn(async move {
             loop {
                 if backend.player.is_playing().unwrap_or(false) {
-                    debug!("Adding time");
+                    // debug!("Adding time");
                     backend.user_profile.add_time();
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 } else {
-                    debug!("not adding time");
+                    // debug!("not adding time");
                 }
             }
         });
@@ -218,7 +221,9 @@ impl SongPlayer {
         if let Ok(state) = self.songstate.lock() {
             if *state == SongState::Playing {
                 match key.code {
-                    KeyCode::Char('n') => {
+                    KeyCode::Char(c)
+                        if key.code == KeyCode::Char(self.key_config.player.playlist_next_song) =>
+                    {
                         if let Ok(is_playlist) = self.is_playlist.lock() {
                             if *is_playlist {
                                 drop(is_playlist);
@@ -229,7 +234,9 @@ impl SongPlayer {
                             }
                         }
                     }
-                    KeyCode::Char('p') => {
+                    KeyCode::Char(c)
+                        if key.code == KeyCode::Char(self.key_config.player.playlist_prev_song) =>
+                    {
                         if let Ok(is_playlist) = self.is_playlist.lock() {
                             if *is_playlist {
                                 drop(is_playlist);
@@ -240,7 +247,9 @@ impl SongPlayer {
                             }
                         }
                     }
-                    KeyCode::Up => {
+                    _ if key.code == KeyCode::Char(self.key_config.player.volume_up)
+                        || key.code == KeyCode::Up =>
+                    {
                         if self.backend.player.high_volume().is_ok() {
                             if let Ok(mut song_details) = self.song_playing.lock() {
                                 if let Some(song) = song_details.as_mut() {
@@ -251,7 +260,9 @@ impl SongPlayer {
                             }
                         }
                     }
-                    KeyCode::Down => {
+                    _ if key.code == KeyCode::Char(self.key_config.player.volume_down)
+                        || key.code == KeyCode::Down =>
+                    {
                         if self.backend.player.low_volume().is_ok() {
                             if let Ok(mut song_details) = self.song_playing.lock() {
                                 if let Some(song) = song_details.as_mut() {
@@ -261,7 +272,11 @@ impl SongPlayer {
                             }
                         }
                     }
-                    KeyCode::Char(' ') | KeyCode::Char(';') => {
+
+                    KeyCode::Char(c)
+                        if key.code == KeyCode::Char(self.key_config.player.pause)
+                            || key.code == KeyCode::Char(' ') =>
+                    {
                         if let Ok(_) = self.backend.player.play_pause() {
                             if let Ok(mut song_details) = self.song_playing.lock() {
                                 if let Some(song) = song_details.as_mut() {
@@ -271,10 +286,14 @@ impl SongPlayer {
                         }
                     }
 
-                    KeyCode::Right | KeyCode::Char('l') => {
+                    _ if key.code == KeyCode::Char(self.key_config.player.skip_plus_secs)
+                        || key.code == KeyCode::Right =>
+                    {
                         self.backend.player.seek_forward().ok();
                     }
-                    KeyCode::Left | KeyCode::Char('j') => {
+                    _ if key.code == KeyCode::Char(self.key_config.player.skip_minus_secs)
+                        || key.code == KeyCode::Left =>
+                    {
                         self.backend.player.seek_backword().ok();
                     }
                     _ => (),

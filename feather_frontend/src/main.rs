@@ -1,14 +1,14 @@
 #![allow(unused)]
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, poll, read};
-use feather::config::USERCONFIG;
+use feather::config::{KeyConfig, USERCONFIG};
 use feather::database::HistoryDB;
 use feather_frontend::home::Home;
 use feather_frontend::playlist_search::PlayListSearch;
 use feather_frontend::search_main::SearchMain;
 use feather_frontend::statusbar::StatusBar;
 use feather_frontend::userplaylist::UserPlayList;
-use feather_frontend::{State, statusbar};
+use feather_frontend::{State, player, statusbar};
 use feather_frontend::{
     backend::Backend, help::Help, history::History, player::SongPlayer, search::Search,
 };
@@ -42,20 +42,20 @@ use std::io::Write;
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
 
-    // // Set up the logger to write to a file
-    // let log_file = OpenOptions::new()
-    //     .create(true)
-    //     .append(true)
-    //     .open("app.log")
-    //     .unwrap();
+    // Set up the logger to write to a file
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("app.log")
+        .unwrap();
 
-    //  // Initialize the logger
-    // simplelog::WriteLogger::init(
-    //     simplelog::LevelFilter::Debug,
-    //     simplelog::Config::default(),
-    //     log_file,
-    // )
-    // .unwrap();
+    // Initialize the logger
+    simplelog::WriteLogger::init(
+        simplelog::LevelFilter::Debug,
+        simplelog::Config::default(),
+        log_file,
+    )
+    .unwrap();
 
     let terminal = ratatui::init();
     let _app = App::new().render(terminal).await;
@@ -74,6 +74,7 @@ struct App<'a> {
     player: SongPlayer,
     status_bar: StatusBar,
     user_config: Rc<USERCONFIG>,
+    key_config: Rc<KeyConfig>,
     // backend: Arc<Backend>,
     help_mode: bool,
     exit: bool,
@@ -93,6 +94,7 @@ impl App<'_> {
             Backend::new(history.clone(), get_cookies, tx.clone(), tx_playlist_off).unwrap(),
         );
         let config = Rc::new(USERCONFIG::new().unwrap()); // unwrap because application should not be able to run without valid config
+        let key_config = Rc::new(KeyConfig::new().unwrap());
         let search = Search::new(backend.clone(), config.clone());
         let playlist_search =
             PlayListSearch::new(backend.clone(), tx_playlist.clone(), config.clone());
@@ -112,6 +114,7 @@ impl App<'_> {
                 rx_playlist,
                 rx_playlist_off,
                 config.clone(),
+                key_config.clone(),
             ),
             // backend,
             help_mode: false,
@@ -119,34 +122,44 @@ impl App<'_> {
             status_bar: StatusBar::new(),
             prev_state: None,
             user_config: config,
+            key_config: key_config,
         }
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Char(':') => {
-                if let Ok(next_key) = crossterm::event::read() {
-                    if let Event::Key(next_key) = next_key {
-                        match next_key.code {
-                            KeyCode::Char(';') => self.state = State::Home,
-                            KeyCode::Char('s') => self.state = State::Search,
-                            KeyCode::Char('u') => self.state = State::UserPlaylist,
-                            KeyCode::Char('h') => self.state = State::History,
-                            KeyCode::Char('p') => {
+        let leader = self.key_config.leader;
+
+        if let KeyCode::Char(c) = key.code {
+            if c == leader {
+                if let Ok(Event::Key(next_key)) = crossterm::event::read() {
+                    if let KeyCode::Char(next_c) = next_key.code {
+                        match next_c {
+                            c if c == self.key_config.navigation.home => self.state = State::Home,
+                            c if c == self.key_config.navigation.search => {
+                                self.state = State::Search
+                            }
+                            c if c == self.key_config.navigation.userplaylist => {
+                                self.state = State::UserPlaylist
+                            }
+                            c if c == self.key_config.navigation.history => {
+                                self.state = State::History
+                            }
+                            c if c == self.key_config.navigation.player => {
                                 if self.state != State::SongPlayer {
                                     self.prev_state = Some(self.state);
                                 }
                                 self.state = State::SongPlayer;
                             }
-                            KeyCode::Char('q') => {
-                                self.exit = true;
-                            }
+                            c if c == self.key_config.navigation.quit => self.exit = true,
                             _ => {}
                         }
                     }
                 }
+            } else {
+                self.handle_global_keystrokes(key);
             }
-            _ => self.handle_global_keystrokes(key),
+        } else {
+            self.handle_global_keystrokes(key);
         }
     }
 

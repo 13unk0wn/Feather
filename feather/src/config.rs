@@ -64,13 +64,13 @@ impl USERCONFIG {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct KeyConfig {
-    leader: char,
-    navigation: Navigation,
+pub struct KeyConfig {
+    pub leader: char,
+    pub navigation: Navigation,
     history: HistoryKeyBindings,
     default: DefaultControl,
     search: SearchKeyBindings,
-    player: PlayerKeyBindings,
+    pub player: PlayerKeyBindings,
 }
 
 impl Default for KeyConfig {
@@ -87,13 +87,13 @@ impl Default for KeyConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Navigation {
-    home: char,
-    quit: char,
-    search: char,
-    player: char,
-    history: char,
-    userplaylist: char,
+pub struct Navigation {
+    pub home: char,
+    pub quit: char,
+    pub search: char,
+    pub player: char,
+    pub history: char,
+    pub userplaylist: char,
 }
 
 impl Default for Navigation {
@@ -229,20 +229,20 @@ impl Default for SongSearchKeyBinding {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct PlayerKeyBindings {
-    pause: char, // space will always work
-    skip_plus_secs: char,
-    skip_minus_secs: char,
-    playlist_next_song: char,
-    playlist_prev_song: char,
-    volume_up: char,
-    volume_down: char,
+pub struct PlayerKeyBindings {
+    pub pause: char, // space will always work
+    pub skip_plus_secs: char,
+    pub skip_minus_secs: char,
+    pub playlist_next_song: char,
+    pub playlist_prev_song: char,
+    pub volume_up: char,
+    pub volume_down: char,
 }
 
 impl Default for PlayerKeyBindings {
     fn default() -> Self {
         Self {
-            pause: 'p',
+            pause: ';',
             skip_plus_secs: 'l',
             skip_minus_secs: 'l',
             playlist_next_song: 'n',
@@ -253,4 +253,20 @@ impl Default for PlayerKeyBindings {
     }
 }
 
-impl KeyConfig {}
+impl KeyConfig {
+    pub fn new() -> Result<Self, USERCONFIGERROR> {
+        let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        path.push("Feather/keystrokes.toml");
+        if path.exists() {
+            let contents = fs::read_to_string(&path)?;
+            let config: KeyConfig =
+                toml::from_str(&contents).map_err(|_| USERCONFIGERROR::ValidInputError)?;
+            return Ok(config);
+        } else {
+            let default_config = KeyConfig::default();
+            let toml_str = toml::to_string_pretty(&default_config).unwrap();
+            fs::write(&path, toml_str)?;
+            return Ok(default_config);
+        }
+    }
+}

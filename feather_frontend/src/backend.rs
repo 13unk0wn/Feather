@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
+use feather::config::KeyConfig;
 use feather::database::UserProfileError;
 use feather::database::{PlaylistManager, UserProfileDb};
 use feather::database::{PlaylistManagerError, SongError};
