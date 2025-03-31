@@ -67,9 +67,9 @@ impl USERCONFIG {
 pub struct KeyConfig {
     pub leader: char,
     pub navigation: Navigation,
-    history: HistoryKeyBindings,
-    default: DefaultControl,
-    search: SearchKeyBindings,
+    pub history: HistoryKeyBindings,
+    pub default: DefaultControl,
+    pub search: SearchKeyBindings,
     pub player: PlayerKeyBindings,
 }
 
@@ -110,11 +110,13 @@ impl Default for Navigation {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct DefaultControl {
-    up: char,
-    down: char,
-    add_to_playlist: char,
-    play_song: char,
+pub struct DefaultControl {
+    pub up: char,
+    pub down: char,
+    pub next_page: char,
+    pub prev_page: char,
+    pub add_to_playlist: char,
+    pub play_song: char,
 }
 
 impl Default for DefaultControl {
@@ -122,6 +124,8 @@ impl Default for DefaultControl {
         Self {
             up: 'k',
             down: 'j',
+            next_page: 'l',
+            prev_page: 'h',
             add_to_playlist: 'a',
             play_song: 'p',
         }
@@ -129,11 +133,14 @@ impl Default for DefaultControl {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct HistoryKeyBindings {
-    up: Option<char>,
-    down: Option<char>,
-    add_to_playlist: Option<char>,
-    play_song: Option<char>,
+pub struct HistoryKeyBindings {
+    pub up: Option<char>,
+    pub down: Option<char>,
+    pub next: Option<char>,
+    pub prev: Option<char>,
+    pub add_to_playlist: Option<char>,
+    pub play_song: Option<char>,
+    // TODO :  Add delete
 }
 
 impl Default for HistoryKeyBindings {
@@ -142,6 +149,8 @@ impl Default for HistoryKeyBindings {
         Self {
             up: None,
             down: None,
+            next: None,
+            prev: None,
             add_to_playlist: None,
             play_song: None,
         }
@@ -149,18 +158,18 @@ impl Default for HistoryKeyBindings {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct SearchKeyBindings {
-    switch: char, // allow to toggle b/w playlist and song search.
-    up: Option<char>,
-    down: Option<char>,
-    playlist: PlaylistKeyBindings,
-    song: SongSearchKeyBinding,
+pub struct SearchKeyBindings {
+    pub switch: char, // allow to toggle b/w playlist and song search.
+    pub up: Option<char>,
+    pub down: Option<char>,
+    pub playlist: PlaylistKeyBindings,
+    pub song: SongSearchKeyBinding,
 }
 
 impl Default for SearchKeyBindings {
     fn default() -> Self {
         Self {
-            switch: ':',
+            switch: ';',
             up: None,
             down: None,
             playlist: PlaylistKeyBindings::default(),
@@ -170,11 +179,10 @@ impl Default for SearchKeyBindings {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct PlaylistKeyBindings {
-    switch_mode: char, // Switch Mode b/w ViewPlaylistSearch and SearchPlaylist
-
-    playlist_search: PlayListSearchKeyBindings,
-    view_playlist: PlayListViewKeyBindings,
+pub struct PlaylistKeyBindings {
+    pub switch_mode: char, // Switch Mode b/w ViewPlaylistSearch and SearchPlaylist
+    pub playlist_search: PlayListSearchKeyBindings,
+    pub view_playlist: PlayListViewKeyBindings,
 }
 
 impl Default for PlaylistKeyBindings {
@@ -188,9 +196,9 @@ impl Default for PlaylistKeyBindings {
 }
 // USERPLAYLIST WILL ALSO FOLLOW THE SAME KEYBINDINGS
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct PlayListSearchKeyBindings {
-    switch_mode: Option<char>, // it switch from playlist_search_box to playlist_view_box
-    select_playlist: Option<char>,
+pub struct PlayListSearchKeyBindings {
+    pub switch_mode: Option<char>, // it switch from playlist_search_box to playlist_view_box
+    pub select_playlist: Option<char>,
 }
 
 impl Default for PlayListSearchKeyBindings {
@@ -203,9 +211,11 @@ impl Default for PlayListSearchKeyBindings {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct PlayListViewKeyBindings {
-    start_playlist: char,  // these key is used start playlist from song one
-    start_from_here: char, // these key is used start song from the selected song
+pub struct PlayListViewKeyBindings {
+    pub start_playlist: char,  // these key is used start playlist from song one
+    pub start_from_here: char, // these key is used start song from the selected song
+    pub next_page: Option<char>,
+    pub prev_page: Option<char>,
 }
 
 impl Default for PlayListViewKeyBindings {
@@ -213,13 +223,15 @@ impl Default for PlayListViewKeyBindings {
         Self {
             start_playlist: 'p',
             start_from_here: 'a',
+            next_page: None,
+            prev_page: None,
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct SongSearchKeyBinding {
-    switch_mode: Option<char>, // switch from song textbox to song search list
+pub struct SongSearchKeyBinding {
+    pub switch_mode: Option<char>, // switch from song textbox to song search list
 }
 
 impl Default for SongSearchKeyBinding {

@@ -3,7 +3,7 @@ use crate::backend::Backend;
 use crate::error::ErrorPopUp;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
-use feather::config::USERCONFIG;
+use feather::config::{KeyConfig, USERCONFIG};
 use feather::{ArtistName, SongId, SongName};
 use feather::{PlaylistName, database::Song};
 use log::debug;
@@ -92,13 +92,17 @@ impl Search<'_> {
     }
 
     // Handles keyboard input based on current state
-    pub fn handle_keystrokes(&mut self, key: KeyEvent) {
+    pub fn handle_keystrokes(&mut self, key: KeyEvent, key_config: Rc<KeyConfig>) {
         if let SearchState::SearchBar = self.state {
             match key.code {
-                KeyCode::Tab => {
+                KeyCode::Char(c) if Some(c) == key_config.search.song.switch_mode => {
                     // Switch to results state
                     self.change_state();
                 }
+                KeyCode::Tab => {
+                    self.change_state();
+                }
+                // Default Bindings
                 KeyCode::Enter => {
                     // Execute search
                     self.display_content = false;
@@ -136,10 +140,13 @@ impl Search<'_> {
             if value {
                 // SearchResults state
                 match key.code {
-                    KeyCode::Tab => {
+                    KeyCode::Char(c) if Some(c) == key_config.search.song.switch_mode => {
+                        // Switch to results state
                         self.change_state();
-                    } // Switch to search bar
-                    KeyCode::Char('a') => {
+                    }
+                    _ if key.code == KeyCode::Char(key_config.default.add_to_playlist)
+                        || key.code == KeyCode::Char('a') =>
+                    {
                         if let Some(song) = self.selected_song.clone() {
                             let tx = self.tx_song.clone();
                             tokio::spawn(async move {
@@ -148,7 +155,12 @@ impl Search<'_> {
                             self.popup_appear = true;
                         }
                     }
-                    KeyCode::Char('j') | KeyCode::Down => {
+                    _ if key.code
+                        == KeyCode::Char(
+                            key_config.search.down.unwrap_or(key_config.default.down),
+                        )
+                        || key.code == KeyCode::Down =>
+                    {
                         // Move selection down
                         self.selected = self.selected.saturating_add(1);
                         if let Some(len) = self.max_len {
@@ -157,13 +169,18 @@ impl Search<'_> {
                         self.vertical_scroll_state =
                             self.vertical_scroll_state.position(self.selected);
                     }
-                    KeyCode::Char('k') | KeyCode::Up => {
+                    _ if key.code
+                        == KeyCode::Char(key_config.search.up.unwrap_or(key_config.default.up))
+                        || key.code == KeyCode::Up =>
+                    {
                         // Move selection up
                         self.selected = self.selected.saturating_sub(1);
                         self.vertical_scroll_state =
                             self.vertical_scroll_state.position(self.selected);
                     }
-                    KeyCode::Enter => {
+                    _ if key.code == KeyCode::Char(key_config.default.play_song)
+                        || key.code == KeyCode::Enter =>
+                    {
                         // Play selected song
                         if let Some(song) = self.selected_song.clone() {
                             let backend = self.backend.clone();
@@ -177,6 +194,10 @@ impl Search<'_> {
                             });
                         }
                     }
+                    // Default KeyBindings
+                    KeyCode::Tab => {
+                        self.change_state();
+                    } // Switch to search bar
                     _ => {}
                 }
             }

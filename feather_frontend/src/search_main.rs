@@ -1,4 +1,5 @@
 #![allow(unused)]
+use feather::config::KeyConfig;
 use ratatui::prelude::Alignment;
 use ratatui::prelude::Direction;
 use ratatui::style::Color;
@@ -9,6 +10,8 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
+use simplelog::Config;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
@@ -36,14 +39,20 @@ pub struct SearchMain<'a> {
     state: SearchMainState,
     search: Search<'a>,
     playlist_search: PlayListSearch<'a>,
+    key_config: Rc<KeyConfig>,
 }
 
 impl<'a> SearchMain<'a> {
-    pub fn new(search: Search<'a>, playlist_search: PlayListSearch<'a>) -> Self {
+    pub fn new(
+        search: Search<'a>,
+        playlist_search: PlayListSearch<'a>,
+        key_config: Rc<KeyConfig>,
+    ) -> Self {
         SearchMain {
             state: SearchMainState::SongSearch,
             search,
             playlist_search,
+            key_config,
         }
     }
     fn change_state(&mut self) {
@@ -55,10 +64,16 @@ impl<'a> SearchMain<'a> {
     }
     pub fn handle_keystrokes(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char(';') => self.change_state(),
+            KeyCode::Char(c) if key.code == KeyCode::Char(self.key_config.search.switch) => {
+                self.change_state();
+            }
             _ => match self.state {
-                SearchMainState::SongSearch => self.search.handle_keystrokes(key),
-                _ => self.playlist_search.handle_keystrokes(key),
+                SearchMainState::SongSearch => {
+                    self.search.handle_keystrokes(key, self.key_config.clone())
+                }
+                _ => self
+                    .playlist_search
+                    .handle_keystrokes(key, self.key_config.clone()),
             },
         }
     }

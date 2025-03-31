@@ -2,6 +2,7 @@
 use crate::backend::Backend;
 use crate::popup_playlist::PopUpAddPlaylist;
 use crossterm::event::{KeyCode, KeyEvent};
+use feather::config::KeyConfig;
 use feather::config::USERCONFIG;
 use feather::database::HISTORY_PAGE_SIZE;
 use feather::database::HistoryDB;
@@ -56,7 +57,7 @@ impl History {
     }
 
     // Handles keyboard input for navigation and actions
-    pub fn handle_keystrokes(&mut self, key: KeyEvent) {
+    pub fn handle_keystrokes(&mut self, key: KeyEvent, key_config: Rc<KeyConfig>) {
         let mut value = true;
         if self.popup_appear {
             self.popup.handle_keystrokes(key);
@@ -64,17 +65,39 @@ impl History {
         }
         if value {
             match key.code {
-                KeyCode::Right => {
+                _ if key.code
+                    == KeyCode::Char(
+                        key_config
+                            .history
+                            .next
+                            .unwrap_or(key_config.default.next_page),
+                    )
+                    || key.code == KeyCode::Right =>
+                {
                     if self.backend.history.db.len() >= self.offset + HISTORY_PAGE_SIZE {
                         self.offset += HISTORY_PAGE_SIZE;
                         self.selected = 0;
                     }
                 }
-                KeyCode::Left => {
+                _ if key.code
+                    == KeyCode::Char(
+                        key_config
+                            .history
+                            .prev
+                            .unwrap_or(key_config.default.prev_page),
+                    )
+                    || key.code == KeyCode::Left =>
+                {
                     self.selected = 0;
                     self.offset = self.offset.saturating_sub(HISTORY_PAGE_SIZE);
                 }
-                KeyCode::Char('a') => {
+                KeyCode::Char(c)
+                    if c == key_config
+                        .history
+                        .add_to_playlist
+                        .unwrap_or(key_config.default.add_to_playlist)
+                        || c == 'a' =>
+                {
                     if let Some(song) = self.selected_song.clone() {
                         let tx = self.tx_song.clone();
                         tokio::spawn(async move {
@@ -83,11 +106,19 @@ impl History {
                         self.popup_appear = true;
                     }
                 }
-                KeyCode::Char('j') | KeyCode::Down => {
+                _ if key.code
+                    == KeyCode::Char(
+                        key_config.history.down.unwrap_or(key_config.default.down),
+                    )
+                    || key.code == KeyCode::Down =>
+                {
                     // Move selection down
                     self.select_next();
                 }
-                KeyCode::Char('k') | KeyCode::Up => {
+                _ if key.code
+                    == KeyCode::Char(key_config.history.up.unwrap_or(key_config.default.up))
+                    || key.code == KeyCode::Up =>
+                {
                     // Move selection up
                     self.select_previous();
                 }
@@ -97,7 +128,15 @@ impl History {
                         let _ = self.history.delete_entry(&song.id);
                     }
                 }
-                KeyCode::Enter => {
+                _ if key.code
+                    == KeyCode::Char(
+                        key_config
+                            .history
+                            .play_song
+                            .unwrap_or(key_config.default.play_song),
+                    )
+                    || key.code == KeyCode::Enter =>
+                {
                     // Play selected song
                     if let Some(song) = self.selected_song.clone() {
                         let backend = Arc::clone(&self.backend);

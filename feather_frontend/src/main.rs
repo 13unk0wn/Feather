@@ -101,7 +101,7 @@ impl App<'_> {
 
         App {
             state: State::Home,
-            search: SearchMain::new(search, playlist_search),
+            search: SearchMain::new(search, playlist_search, key_config.clone()),
             userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone(), config.clone()),
             history: History::new(history, backend.clone(), config.clone()),
             help: Help::new(),
@@ -176,7 +176,7 @@ impl App<'_> {
                 _ => (),
             },
             State::History => match key.code {
-                _ => self.history.handle_keystrokes(key),
+                _ => self.history.handle_keystrokes(key, self.key_config.clone()),
             },
             State::Home => self.home.handle_keywords(key),
             State::SongPlayer => match key.code {
