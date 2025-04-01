@@ -183,7 +183,9 @@ impl App<'_> {
                 _ => self.player.handle_keystrokes(key),
             },
             State::UserPlaylist => match key.code {
-                _ => self.userplaylist.handle_keystrokes(key),
+                _ => self
+                    .userplaylist
+                    .handle_keystrokes(key, self.key_config.clone()),
             },
             _ => (),
         }

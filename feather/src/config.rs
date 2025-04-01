@@ -17,6 +17,7 @@ pub struct USERCONFIG {
     pub player_progress_bar_color: (u8, u8, u8),
     pub player_volume_bar_color: (u8, u8, u8),
     pub selected_mode_text_color: (u8, u8, u8),
+    pub image_url: Option<String>,
 }
 
 #[derive(Error, Debug)]
@@ -40,6 +41,7 @@ impl Default for USERCONFIG {
             player_progress_bar_color: (214, 93, 14),
             player_volume_bar_color: (152, 151, 26),
             selected_mode_text_color: (152, 151, 26),
+            image_url: None,
         }
     }
 }
@@ -71,6 +73,7 @@ pub struct KeyConfig {
     pub default: DefaultControl,
     pub search: SearchKeyBindings,
     pub player: PlayerKeyBindings,
+    pub user_playlist: UserPlaylistKeyBindings,
 }
 
 impl Default for KeyConfig {
@@ -82,6 +85,7 @@ impl Default for KeyConfig {
             default: DefaultControl::default(),
             search: SearchKeyBindings::default(),
             player: PlayerKeyBindings::default(),
+            user_playlist: UserPlaylistKeyBindings::default(),
         }
     }
 }
@@ -140,6 +144,7 @@ pub struct HistoryKeyBindings {
     pub prev: Option<char>,
     pub add_to_playlist: Option<char>,
     pub play_song: Option<char>,
+    pub delete: char,
     // TODO :  Add delete
 }
 
@@ -153,6 +158,7 @@ impl Default for HistoryKeyBindings {
             prev: None,
             add_to_playlist: None,
             play_song: None,
+            delete: 'd',
         }
     }
 }
@@ -237,6 +243,22 @@ pub struct SongSearchKeyBinding {
 impl Default for SongSearchKeyBinding {
     fn default() -> Self {
         Self { switch_mode: None }
+    }
+}
+
+// UserPlaylist follows the bindings of PlaylistKeyBindings,only the seprate one are mentioned here
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UserPlaylistKeyBindings {
+    pub new_playlist: char,
+    pub delete_playlist: char,
+}
+
+impl Default for UserPlaylistKeyBindings {
+    fn default() -> Self {
+        Self {
+            new_playlist: '`',
+            delete_playlist: 'd',
+        }
     }
 }
 

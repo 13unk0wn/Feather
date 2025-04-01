@@ -3,6 +3,7 @@ use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use feather::PlaylistName;
+use feather::config::KeyConfig;
 use feather::database::PAGE_SIZE;
 use feather::database::Song;
 use feather::database::SongDatabase;
@@ -95,21 +96,23 @@ impl<'a> UserPlayList<'a> {
         }
     }
 
-    pub fn handle_keystrokes(&mut self, key: KeyEvent) {
+    pub fn handle_keystrokes(&mut self, key: KeyEvent, key_config: Rc<KeyConfig>) {
         match key.code {
-            KeyCode::Char('`') => {
+            KeyCode::Char(c) if key_config.user_playlist.new_playlist == c => {
                 self.state = State::CreatePlayList;
                 if let Ok(mut popup) = self.popup.lock() {
                     *popup = true;
                 }
             }
-            KeyCode::Char('[') => {
+            KeyCode::Char(c) if key_config.search.playlist.switch_mode == c => {
                 self.change_state();
             }
             _ => match self.state {
                 State::CreatePlayList => self.new_playlist.handle_keystrokes(key),
-                State::ViewPlayList => self.viewplaylist.handle_keystrokes(key),
-                State::AllPlayList => self.list_playlist.handle_keystrokes(key),
+                State::ViewPlayList => self.viewplaylist.handle_keystrokes(key, key_config.clone()),
+                State::AllPlayList => self
+                    .list_playlist
+                    .handle_keystrokes(key, key_config.clone()),
                 _ => (),
             },
         }
@@ -175,7 +178,7 @@ impl<'a> NewPlayList<'a> {
             textarea: TextArea::default(),
             playlistname: String::new(),
             backend,
-            popup: popup,
+            popup,
             tx,
             config,
             error,
@@ -275,12 +278,22 @@ impl ListPlaylist {
         }
     }
 
-    pub fn handle_keystrokes(&mut self, key: KeyEvent) {
+    pub fn handle_keystrokes(&mut self, key: KeyEvent, key_config: Rc<KeyConfig>) {
         if let Some(_) = &self.delete_playlist.playlist_name {
             self.delete_playlist.handle_keystokes(key);
         } else {
             match key.code {
-                KeyCode::Enter => {
+                _ if key.code
+                    == KeyCode::Char(
+                        key_config
+                            .search
+                            .playlist
+                            .playlist_search
+                            .select_playlist
+                            .unwrap_or(key_config.default.play_song),
+                    )
+                    || key.code == KeyCode::Enter =>
+                {
                     if let Some(playlist_name) = self.selected_playlist_name.clone() {
                         let tx = self.tx.clone();
                         tokio::spawn(async move {
@@ -289,15 +302,19 @@ impl ListPlaylist {
                     }
                 }
                 KeyCode::Char('d') => {
-                    debug!("{:?}", self.selected_playlist_name.clone());
-                    debug!("{:?}", "Set");
                     self.delete_playlist.playlist_name = self.selected_playlist_name.clone();
                 }
-                KeyCode::Char('j') | KeyCode::Down => {
+                _ if key.code
+                    == KeyCode::Char(key_config.search.down.unwrap_or(key_config.default.down))
+                    || key.code == KeyCode::Down =>
+                {
                     // Move selection down
                     self.select_next();
                 }
-                KeyCode::Char('k') | KeyCode::Up => {
+                _ if key.code
+                    == KeyCode::Char(key_config.search.up.unwrap_or(key_config.default.up))
+                    || key.code == KeyCode::Up =>
+                {
                     // Move selection up
                     self.select_previous();
                 }
@@ -419,9 +436,9 @@ impl ViewPlayList {
             error,
         }
     }
-    fn handle_keystrokes(&mut self, key: KeyEvent) {
+    fn handle_keystrokes(&mut self, key: KeyEvent, key_config: Rc<KeyConfig>) {
         match key.code {
-            KeyCode::Char('p') => {
+            KeyCode::Char(c) if c == key_config.search.playlist.view_playlist.start_playlist => {
                 let db = self.db.clone();
                 let backend = self.backend.clone();
                 tokio::spawn(async move {
@@ -436,7 +453,10 @@ impl ViewPlayList {
                     }
                 });
             }
-            KeyCode::Enter => {
+            _ if key.code
+                == KeyCode::Char(key_config.search.playlist.view_playlist.start_from_here)
+                || key.code == KeyCode::Enter =>
+            {
                 let db = self.db.clone();
                 let backend = self.backend.clone();
                 let select = self.selected;
@@ -452,7 +472,17 @@ impl ViewPlayList {
                     }
                 });
             }
-            KeyCode::Right => {
+            _ if key.code
+                == KeyCode::Char(
+                    key_config
+                        .search
+                        .playlist
+                        .view_playlist
+                        .next_page
+                        .unwrap_or(key_config.default.next_page),
+                )
+                || key.code == KeyCode::Right =>
+            {
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
                         if let Ok(max_page) = self.max_page.lock() {
@@ -474,7 +504,17 @@ impl ViewPlayList {
                     }
                 }
             }
-            KeyCode::Left => {
+            _ if key.code
+                == KeyCode::Char(
+                    key_config
+                        .search
+                        .playlist
+                        .view_playlist
+                        .prev_page
+                        .unwrap_or(key_config.default.prev_page),
+                )
+                || key.code == KeyCode::Left =>
+            {
                 if let Ok(db) = self.db.lock() {
                     if let Some(db) = db.clone() {
                         let new_offset = self.offset.saturating_sub(PAGE_SIZE);
@@ -493,13 +533,19 @@ impl ViewPlayList {
                     }
                 }
             }
-            KeyCode::Char('j') | KeyCode::Down => {
+            _ if key.code
+                == KeyCode::Char(key_config.search.down.unwrap_or(key_config.default.down))
+                || key.code == KeyCode::Down =>
+            {
                 // Move selection down
                 self.selected = self.selected.saturating_add(1);
                 self.selected = self.selected.min(self.max_len - 1);
                 self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);
             }
-            KeyCode::Char('k') | KeyCode::Up => {
+            _ if key.code
+                == KeyCode::Char(key_config.search.up.unwrap_or(key_config.default.up))
+                || key.code == KeyCode::Up =>
+            {
                 // Move selection up
                 self.selected = self.selected.saturating_sub(1);
                 self.verticle_scrollbar = self.verticle_scrollbar.position(self.selected);

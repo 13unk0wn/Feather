@@ -122,7 +122,7 @@ impl History {
                     // Move selection up
                     self.select_previous();
                 }
-                KeyCode::Char('d') => {
+                KeyCode::Char(c) if c == key_config.history.delete => {
                     // Delete selected entry
                     if let Some(song) = &self.selected_song {
                         let _ = self.history.delete_entry(&song.id);

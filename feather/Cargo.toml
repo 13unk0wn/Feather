@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 log = { workspace = true }
 sys-info = "0.9.1"
 toml = "0.8.20"
+rascii_art = { workspace = true }
 
 [lib]
 name = "feather"

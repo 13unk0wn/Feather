@@ -1,24 +1,28 @@
 #![allow(unused)]
 use crate::backend::{self, Backend};
-use color_eyre::owo_colors::OwoColorize;
 use feather::database::FAVOURITE_SONGS_SIZE;
+use log::debug;
+use log::log;
 use ratatui::widgets::List;
 use ratatui::widgets::ListState;
 use ratatui::widgets::Scrollbar;
 use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::StatefulWidget;
 
+use ratatui::prelude::Constraint;
+
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use feather::config::USERCONFIG;
 use ratatui::prelude::Widget;
+use ratatui::text::Text;
 use ratatui::widgets::ListItem;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 use std::rc::Rc;
 use std::sync::Arc;
@@ -38,11 +42,19 @@ pub struct Home {
 
 impl Home {
     pub fn new(backend: Arc<Backend>, config: Rc<USERCONFIG>) -> Self {
-        Self {
+        let user = Self {
             backend: backend.clone(),
             config: config.clone(),
             favourite_songs: FavoriteSongs::new(backend, config),
-        }
+        };
+
+        user.backend
+            .user_profile
+            .check_pfp_change(user.config.clone())
+            .unwrap();
+
+        debug!("{:?}", user.config);
+        user
     }
 
     pub fn handle_keywords(&mut self, key: KeyEvent) {
@@ -52,24 +64,40 @@ impl Home {
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                ratatui::layout::Constraint::Percentage(50),
-                ratatui::layout::Constraint::Percentage(50),
-            ])
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
 
         let image_area = chunks[0];
         let stats_area = chunks[1];
         let stats_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                ratatui::layout::Constraint::Percentage(50),
-                ratatui::layout::Constraint::Percentage(50),
-            ])
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(stats_area);
 
         let get_data = self.backend.user_profile.give_info().unwrap();
 
+        let ascii_art_lines: Vec<Line> = get_data
+            .pfp
+            .split('\n') // Split manually
+            .map(|line| Line::from(Span::raw(line.to_string()))) // Convert to `Line`
+            .collect();
+
+        // Manually create a `Text` object instead of directly using `Paragraph`
+        let ascii_text = Text::from(ascii_art_lines);
+
+        let image_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" 🎨 Profile Picture ")
+            .title_alignment(Alignment::Center);
+
+        // Create `Paragraph` with explicit `Text`
+        let image_paragraph = Paragraph::new(ascii_text)
+            .block(image_block)
+            .alignment(Alignment::Left);
+        // ✅ Render ASCII Image
+        image_paragraph.render(image_area, buf);
+
+        debug!("{}", get_data.pfp.clone());
         let user_stats = vec![
             Line::from(vec![
                 Span::styled(
@@ -116,7 +144,7 @@ impl Home {
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!("{} mins", get_data.time_played / 60,),
+                    format!("{} mins", get_data.time_played / 60),
                     Style::default().fg(Color::White),
                 ),
             ]),
