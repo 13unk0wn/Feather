@@ -101,7 +101,7 @@ impl App<'_> {
 
         App {
             state: State::Home,
-            search: SearchMain::new(search, playlist_search, key_config.clone()),
+            search: SearchMain::new(search, playlist_search, key_config.clone(), config.clone()),
             userplaylist: UserPlayList::new(backend.clone(), tx_playlist.clone(), config.clone()),
             history: History::new(history, backend.clone(), config.clone()),
             help: Help::new(),
@@ -119,10 +119,10 @@ impl App<'_> {
             // backend,
             help_mode: false,
             exit: false,
-            status_bar: StatusBar::new(),
+            status_bar: StatusBar::new(config.clone(), key_config.clone()),
             prev_state: None,
             user_config: config,
-            key_config: key_config,
+            key_config,
         }
     }
 
@@ -257,8 +257,12 @@ impl App<'_> {
                             _ => (),
                         }
                         self.player.render(layout[2], frame.buffer_mut());
-                        self.status_bar
-                            .render(layout[3], frame.buffer_mut(), self.state);
+                        if self.state != State::Search {
+                            self.status_bar
+                                .render(layout[3], frame.buffer_mut(), self.state);
+                        } else {
+                            self.search.show_keystokes(layout[3], frame.buffer_mut());
+                        }
                     } else {
                         self.help.render(layout[1], frame.buffer_mut());
                     }

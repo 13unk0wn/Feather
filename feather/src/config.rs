@@ -18,6 +18,7 @@ pub struct USERCONFIG {
     pub player_volume_bar_color: (u8, u8, u8),
     pub selected_mode_text_color: (u8, u8, u8),
     pub image_url: Option<String>,
+    pub image_color: Option<(u8, u8, u8)>,
 }
 
 #[derive(Error, Debug)]
@@ -42,6 +43,7 @@ impl Default for USERCONFIG {
             player_volume_bar_color: (152, 151, 26),
             selected_mode_text_color: (152, 151, 26),
             image_url: None,
+            image_color: None,
         }
     }
 }

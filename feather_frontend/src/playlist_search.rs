@@ -33,7 +33,7 @@ use tui_textarea::TextArea;
 use crate::backend::Backend;
 use feather::config::USERCONFIG;
 #[derive(PartialEq, PartialOrd)]
-enum PlayListSearchState {
+pub enum PlayListSearchState {
     Search,
     ViewSelectedPlaylist,
 }
@@ -41,7 +41,7 @@ enum PlayListSearchState {
 pub struct PlayListSearch<'a> {
     search: PlayListSearchComponent<'a>,
     view: SeletectPlayListView,
-    state: PlayListSearchState,
+    pub state: PlayListSearchState,
 }
 
 impl<'a> PlayListSearch<'a> {

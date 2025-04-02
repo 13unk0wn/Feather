@@ -1,5 +1,6 @@
 #![allow(unused)]
 use crate::backend::{self, Backend};
+use color_eyre::owo_colors::OwoColorize;
 use feather::database::FAVOURITE_SONGS_SIZE;
 use log::debug;
 use log::log;
@@ -53,7 +54,6 @@ impl Home {
             .check_pfp_change(user.config.clone())
             .unwrap();
 
-        debug!("{:?}", user.config);
         user
     }
 
@@ -62,13 +62,20 @@ impl Home {
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        let fixed_width = 80;
+        let fixed_height = 40;
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([Constraint::Length(fixed_width), Constraint::Min(0)])
             .split(area);
 
         let image_area = chunks[0];
+        let image_area = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(fixed_height)])
+            .split(image_area)[0];
         let stats_area = chunks[1];
+
         let stats_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -85,19 +92,21 @@ impl Home {
         // Manually create a `Text` object instead of directly using `Paragraph`
         let ascii_text = Text::from(ascii_art_lines);
 
-        let image_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" 🎨 Profile Picture ")
-            .title_alignment(Alignment::Center);
+        let image_block = Block::default().borders(Borders::ALL);
 
+        let selected_tab_color =
+            (self.config.image_color).unwrap_or(self.config.selected_tab_color);
         // Create `Paragraph` with explicit `Text`
         let image_paragraph = Paragraph::new(ascii_text)
             .block(image_block)
+            .style(Style::default().fg(Color::Rgb(
+                selected_tab_color.0,
+                selected_tab_color.1,
+                selected_tab_color.2,
+            )))
             .alignment(Alignment::Left);
-        // ✅ Render ASCII Image
         image_paragraph.render(image_area, buf);
 
-        debug!("{}", get_data.pfp.clone());
         let user_stats = vec![
             Line::from(vec![
                 Span::styled(
