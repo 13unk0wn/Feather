@@ -132,7 +132,7 @@ impl<'a> SearchMain<'a> {
             }
             SearchMainState::PlayListSearch => match self.playlist_search.state {
                 playlist_search::PlayListSearchState::Search => {
-                    let switch = self.key_config.search.switch;
+                    let switch = self.key_config.search.playlist.switch_mode;
                     let search_switch = self
                         .key_config
                         .search
@@ -141,6 +141,9 @@ impl<'a> SearchMain<'a> {
                         .switch_mode
                         .unwrap_or('t');
                     let mut search_switch_str = search_switch.to_string();
+                    if search_switch == 't' {
+                        search_switch_str = "TAB".to_string();
+                    }
                     let add_to_playlist = self.key_config.default.add_to_playlist;
                     let select_playlist = self
                         .key_config
@@ -164,14 +167,6 @@ impl<'a> SearchMain<'a> {
                             Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
                         ),
                         Span::styled(
-                            format!("[{}→add_to_playlist] ", add_to_playlist),
-                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
-                        ),
-                        Span::styled(
-                            format!("[{}→add_to_playlist] ", add_to_playlist),
-                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
-                        ),
-                        Span::styled(
                             format!("[{}/ENTER→play_song] ", select_playlist),
                             Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
                         ),
@@ -181,7 +176,60 @@ impl<'a> SearchMain<'a> {
                         .title_alignment(ratatui::layout::Alignment::Center)
                         .render(vertical_layout[1], buf);
                 }
-                _ => {}
+                playlist_search::PlayListSearchState::ViewSelectedPlaylist => {
+                    let switch = self.key_config.search.playlist.switch_mode;
+
+                    let start_playlist =
+                        self.key_config.search.playlist.view_playlist.start_playlist;
+                    let start_from_here = self
+                        .key_config
+                        .search
+                        .playlist
+                        .view_playlist
+                        .start_from_here;
+
+                    let next_page = self
+                        .key_config
+                        .search
+                        .playlist
+                        .view_playlist
+                        .next_page
+                        .unwrap_or(self.key_config.default.next_page);
+                    let prev_page = self
+                        .key_config
+                        .search
+                        .playlist
+                        .view_playlist
+                        .prev_page
+                        .unwrap_or(self.key_config.default.prev_page);
+
+                    let keystroke_bar = Line::from(vec![
+                        Span::styled(
+                            format!("[{}→Search playlist] ", switch),
+                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
+                        ),
+                        Span::styled(
+                            format!("[{}→Start playlist] ", start_playlist),
+                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
+                        ),
+                        Span::styled(
+                            format!("[{}/ENTER→start_from_here] ", start_from_here),
+                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
+                        ),
+                        Span::styled(
+                            format!("[({}/→)→next_page] ", next_page),
+                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
+                        ),
+                        Span::styled(
+                            format!("[({}/←)→prev_page]", prev_page),
+                            Style::default().fg(Color::Rgb(color.0, color.1, color.2)),
+                        ),
+                    ]);
+                    status_block
+                        .title(keystroke_bar)
+                        .title_alignment(ratatui::layout::Alignment::Center)
+                        .render(vertical_layout[1], buf);
+                }
             },
         }
     }

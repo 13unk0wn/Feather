@@ -62,8 +62,8 @@ impl Home {
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
-        let fixed_width = 80;
-        let fixed_height = 40;
+        let fixed_width = 60;
+        let fixed_height = 30;
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(fixed_width), Constraint::Min(0)])
@@ -109,20 +109,13 @@ impl Home {
 
         let user_stats = vec![
             Line::from(vec![
-                Span::styled(
-                    "👤 User: ",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("👤 User: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::styled(get_data.name, Style::default().fg(Color::White)),
             ]),
             Line::from(vec![
                 Span::styled(
                     "🎵 Last Played: ",
-                    Style::default()
-                        .fg(Color::LightMagenta)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     get_data
@@ -136,9 +129,7 @@ impl Home {
             Line::from(vec![
                 Span::styled(
                     "📀 Songs Played: ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     get_data.songs_played.to_string(),
@@ -148,9 +139,7 @@ impl Home {
             Line::from(vec![
                 Span::styled(
                     "⏳ Time Played: ",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!("{} mins", get_data.time_played / 60),

@@ -337,6 +337,7 @@ impl SongPlayer {
         let mut text = vec![Line::from("")];
         let mut pause = false;
         let progress_bar_color = self.config.player_progress_bar_color;
+        let player_text_color = self.config.player_text_color;
 
         if let Ok(state) = self.songstate.lock() {
             text = match *state {
@@ -409,7 +410,14 @@ impl SongPlayer {
                                 progress_bar_color.2,
                             )))
                             .ratio(percentage.min(1.0))
-                            .label(Span::styled(label_text, Style::default().fg(Color::Blue)));
+                            .label(Span::styled(
+                                label_text,
+                                Style::default().fg(Color::Rgb(
+                                    player_text_color.0,
+                                    player_text_color.1,
+                                    player_text_color.2,
+                                )),
+                            ));
 
                         gauge.render(chunks[1], buf);
                     }
@@ -459,7 +467,11 @@ impl SongPlayer {
             .ratio(((volume as f64) / 100.0).min(1.0))
             .label(Span::styled(
                 format!("{}", volume),
-                Style::default().fg(Color::Blue),
+                Style::default().fg(Color::Rgb(
+                    player_text_color.0,
+                    player_text_color.1,
+                    player_text_color.2,
+                )),
             ));
         gauge.render(chunks[2], buf);
     }

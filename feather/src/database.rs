@@ -617,7 +617,7 @@ impl UserProfileDb {
                 render_to(
                     image_url.clone(),
                     &mut buffer,
-                    &RenderOptions::new().width(80).height(40).colored(false),
+                    &RenderOptions::new().width(60).height(30).colored(false),
                 )
                 .map_err(|_| UserProfileError::RenderFailed)?;
 
@@ -652,7 +652,6 @@ impl UserProfileDb {
 
     pub fn give_info(&self) -> Result<UserProfile, UserProfileError> {
         let user = self.db.get("user")?.unwrap();
-        debug!("{}", "user found");
         let mut user_data: UserProfile = bincode::deserialize(&user)?;
         Ok(user_data)
     }
