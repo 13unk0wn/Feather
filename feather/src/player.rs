@@ -27,6 +27,10 @@ pub enum MpvError {
     Other(String),
 }
 
+unsafe extern "C" {
+    fn mpv_terminate_destroy(ctx: *mut std::ffi::c_void);
+
+}
 impl Player {
     /// Creates a new `Player` instance and configures MPV settings for optimized audio playback.
     pub fn new(cookies: Option<String>) -> Result<Self, MpvError> {
@@ -98,6 +102,12 @@ impl Player {
     pub fn remove_loop(&self) -> Result<(), MpvError> {
         self.player.set_property("loop", "no")?;
         Ok(())
+    }
+
+    pub fn terminate_destroy(&self) {
+        unsafe {
+            mpv_terminate_destroy(self.player.ctx.as_ptr() as *mut std::ffi::c_void);
+        }
     }
 
     /// Resumes playback.

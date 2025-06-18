@@ -58,6 +58,12 @@ pub enum BackendError {
     UserProfileError(#[from] UserProfileError),
 }
 
+// impl Drop for Backend {
+//     fn drop(&mut self) {
+//         self.player.terminate_destroy();
+//     }
+// }
+
 // Error  current_index is not updating
 //  when song is switching on autoplay
 impl Backend {
