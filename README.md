@@ -6,6 +6,10 @@ Feather is a lightweight, efficient, and locally hosted YouTube Music TUI built 
 
 A lightweight, ad-less player with only essential features.
 
+## 🌐 Website
+
+Visit the [Feather website](https://13unk0wn.github.io/Feather/) for an overview and setup instructions.
+
 ## ✨ Features
 
 - 🎶 **Stream YouTube Music** without downloading files.
@@ -102,5 +106,4 @@ Feather is licensed under the MIT License.
 ### 📝 Notes
 
 This project is still in early development. Expect rapid iterations and improvements. Suggestions and feedback are always appreciated!
-
 
