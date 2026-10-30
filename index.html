@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#121310">
+    <meta
+      name="description"
+      content="Feather is a lightweight, open-source YouTube Music player for your terminal."
+    >
+    <title>Feather — music for the terminal</title>
+    <link rel="icon" href="screenshots/logo_small.webp" type="image/webp">
+    <style>
+      body {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 48px 24px;
+        background: #121310;
+        color: #e8e7df;
+        font: 16px/1.7 system-ui, sans-serif;
+      }
+
+      a {
+        color: #d6f36a;
+        text-underline-offset: 3px;
+      }
+
+      a:hover {
+        color: #ecffad;
+      }
+
+      header,
+      footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      header {
+        margin-bottom: 88px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: inherit;
+        font-weight: 650;
+        text-decoration: none;
+      }
+
+      .brand img {
+        width: 28px;
+        height: 28px;
+      }
+
+      nav,
+      footer,
+      .note {
+        color: #9a9c92;
+        font-size: 13px;
+      }
+
+      nav a + a {
+        margin-left: 18px;
+      }
+
+      h1,
+      h2 {
+        color: #f0efe8;
+        font-weight: 560;
+        letter-spacing: -0.035em;
+        line-height: 1.25;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 38px;
+      }
+
+      h2 {
+        margin: 50px 0 12px;
+        font-size: 21px;
+      }
+
+      p {
+        margin: 0 0 16px;
+      }
+
+      .intro {
+        color: #b7b9af;
+        font-size: 18px;
+      }
+
+      .links {
+        margin: 22px 0 12px;
+      }
+
+      .preview {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin-top: 20px;
+        border: 1px solid #34362f;
+        border-radius: 5px;
+      }
+
+      ul {
+        padding-left: 22px;
+      }
+
+      li {
+        padding-left: 3px;
+        margin: 5px 0;
+      }
+
+      pre {
+        overflow-x: auto;
+        padding: 14px 16px;
+        border: 1px solid #34362f;
+        border-radius: 5px;
+        background: #191b17;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      footer {
+        margin-top: 70px;
+        padding-top: 16px;
+        border-top: 1px solid #34362f;
+      }
+
+      @media (max-width: 520px) {
+        body {
+          padding: 30px 20px;
+        }
+
+        header {
+          margin-bottom: 64px;
+        }
+
+        h1 {
+          font-size: 32px;
+        }
+
+        footer {
+          align-items: flex-start;
+          gap: 12px;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="#" aria-label="Feather home">
+        <img src="screenshots/logo_small.webp" alt="">
+        <span>Feather</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#install">Install</a>
+        <a href="https://github.com/13unk0wn/Feather">GitHub ↗</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Music for the terminal.</h1>
+      <p class="intro">
+        Feather is a lightweight YouTube Music player for your command line.
+        Search, play, and get back to what you were doing.
+      </p>
+      <p class="links">
+        <a href="#install">Get started ↓</a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/13unk0wn/Feather">View the source on GitHub ↗</a>
+      </p>
+      <p class="note">Free and open source · Built with Rust</p>
+
+      <img
+        class="preview"
+        src="screenshots/preview.png"
+        alt="Feather running in a terminal"
+        loading="lazy"
+      >
+
+      <h2>Small, focused, and local</h2>
+      <p>
+        Feather streams music from YouTube Music in a simple terminal
+        interface. It uses <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a>
+        to find tracks and <a href="https://mpv.io/">mpv</a> for playback.
+      </p>
+      <ul>
+        <li>Search and stream songs without downloading them.</li>
+        <li>Keep your listening history close at hand.</li>
+        <li>Use a lightweight, keyboard-driven terminal interface.</li>
+      </ul>
+
+      <h2 id="install">Build from source</h2>
+      <p>Install Rust, yt-dlp, and mpv first, then build Feather:</p>
+      <pre><code>git clone https://github.com/13unk0wn/Feather.git
+cd Feather/feather_frontend
+cargo build --release
+./target/release/feather_frontend</code></pre>
+      <p class="note">Linux is currently the only officially supported platform.</p>
+      <p>
+        Still early in development. See the
+        <a href="https://github.com/13unk0wn/Feather">project on GitHub</a>
+        for updates, issues, and the latest source.
+      </p>
+    </main>
+
+    <footer>
+      <span>© 2026 Feather · MIT License</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/13unk0wn/Feather/issues">Issues</a>
+        <a href="https://github.com/13unk0wn/Feather/blob/main/LICENSE">License</a>
+      </nav>
+    </footer>
+  </body>
+</html>
